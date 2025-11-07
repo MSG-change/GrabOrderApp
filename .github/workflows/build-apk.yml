@@ -57,15 +57,27 @@ jobs:
         echo "BUILDOZER_WARN_ON_ROOT=0" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
         echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "ACLOCAL_PATH=/usr/share/aclocal" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+        # 确保aclocal能找到libtool的m4文件
+        sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/libtool.m4 2>/dev/null || true
+        sudo ln -sf /usr/share/aclocal/ltoptions.m4 /usr/share/aclocal/ltoptions.m4 2>/dev/null || true
+        sudo ln -sf /usr/share/aclocal/ltsugar.m4 /usr/share/aclocal/ltsugar.m4 2>/dev/null || true
+        sudo ln -sf /usr/share/aclocal/ltversion.m4 /usr/share/aclocal/ltversion.m4 2>/dev/null || true
+        sudo ln -sf /usr/share/aclocal/lt~obsolete.m4 /usr/share/aclocal/lt~obsolete.m4 2>/dev/null || true
     
     - name: 🔨 构建APK
       run: |
         # 设置为非交互模式，自动接受许可证
         export CI=true
+        export ACLOCAL_PATH=/usr/share/aclocal
+        export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
         buildozer -v android debug
       env:
         BUILDOZER_WARN_ON_ROOT: 0
         CI: true
+        ACLOCAL_PATH: /usr/share/aclocal
+        PKG_CONFIG_PATH: /usr/lib/pkgconfig:/usr/share/pkgconfig
     
     - name: 📤 上传APK
       uses: actions/upload-artifact@v4

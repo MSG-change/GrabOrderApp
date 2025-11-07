@@ -17,8 +17,8 @@ source.include_exts = py,png,jpg,kv,atlas,json
 version = 1.0.0
 
 # 应用需求（Python 包）
-# 使用ONNX Runtime替代PyTorch，更小更快
-requirements = python3,kivy==2.2.1,pillow,requests,numpy,pyjnius,android,onnxruntime
+# numpy和onnxruntime使用p4a预编译版本
+requirements = python3,kivy==2.2.1,pillow,requests,numpy==1.21.4,pyjnius,android
 
 # 图标和启动画面
 #icon.filename = %(source.dir)s/assets/icon.png
@@ -59,14 +59,21 @@ android.accept_sdk_license = True
 # 复制文件
 android.add_src = libs,assets
 
-# Gradle 依赖
-android.gradle_dependencies = 
+# Gradle 依赖 (添加ONNX Runtime Android AAR)
+android.gradle_dependencies = com.microsoft.onnxruntime:onnxruntime-android:1.15.0
 
 # AndroidManifest.xml 额外配置
 android.manifest.intent_filters = 
 
 # 应用主题
 android.manifest.application_meta_data = 
+
+# p4a额外参数
+p4a.bootstrap = sdl2
+p4a.branch = master
+
+# 使用更新的python-for-android版本（修复了一些编译问题）
+p4a.source_dir =  
 
 
 [buildozer]

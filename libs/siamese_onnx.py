@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 """
 ONNX版本的Siamese Network推理
-专为Android APK优化
+使用Android ONNX Runtime (通过pyjnius调用Java API)
 """
 
 import numpy as np
 from PIL import Image
-import onnxruntime as ort
+
+try:
+    # Android环境：使用pyjnius调用Java ONNX Runtime
+    from jnius import autoclass
+    
+    # Java类
+    OrtEnvironment = autoclass('ai.onnxruntime.OrtEnvironment')
+    OrtSession = autoclass('ai.onnxruntime.OrtSession')
+    OnnxTensor = autoclass('ai.onnxruntime.OnnxTensor')
+    
+    ANDROID_MODE = True
+except ImportError:
+    # PC环境：使用Python onnxruntime
+    import onnxruntime as ort
+    ANDROID_MODE = False
 
 
 class SiameseONNX:
@@ -19,15 +33,24 @@ class SiameseONNX:
         Args:
             model_path: ONNX模型文件路径
         """
-        # 加载ONNX模型
-        self.session = ort.InferenceSession(
-            model_path,
-            providers=['CPUExecutionProvider']  # Android只用CPU
-        )
+        self.model_path = model_path
         
-        # 获取输入输出名称
-        self.input_names = [inp.name for inp in self.session.get_inputs()]
-        self.output_names = [out.name for out in self.session.get_outputs()]
+        if ANDROID_MODE:
+            # Android: 使用Java ONNX Runtime
+            print("   使用Android ONNX Runtime (Java)")
+            self.env = OrtEnvironment.getEnvironment()
+            self.session = self.env.createSession(model_path)
+            self.input_names = ['input1', 'input2']  # 硬编码输入名称
+            self.output_names = ['output']
+        else:
+            # PC: 使用Python onnxruntime
+            print("   使用Python ONNX Runtime")
+            self.session = ort.InferenceSession(
+                model_path,
+                providers=['CPUExecutionProvider']
+            )
+            self.input_names = [inp.name for inp in self.session.get_inputs()]
+            self.output_names = [out.name for out in self.session.get_outputs()]
         
         # 图像预处理参数 (ImageNet标准)
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 3, 1, 1)
@@ -75,17 +98,41 @@ class SiameseONNX:
         img1_array = self.preprocess(img1)
         img2_array = self.preprocess(img2)
         
-        # 推理
-        outputs = self.session.run(
-            self.output_names,
-            {
-                self.input_names[0]: img1_array,
-                self.input_names[1]: img2_array
+        if ANDROID_MODE:
+            # Android: 使用Java ONNX Runtime推理
+            # 创建Java端的输入tensor
+            tensor1 = OnnxTensor.createTensor(self.env, img1_array)
+            tensor2 = OnnxTensor.createTensor(self.env, img2_array)
+            
+            # 创建输入map
+            inputs = {
+                self.input_names[0]: tensor1,
+                self.input_names[1]: tensor2
             }
-        )
+            
+            # 推理
+            result = self.session.run(inputs)
+            
+            # 获取输出
+            output_tensor = result.get(self.output_names[0])
+            logits = output_tensor.getFloatBuffer().get(0)
+            
+            # 清理资源
+            tensor1.close()
+            tensor2.close()
+            result.close()
+        else:
+            # PC: 使用Python onnxruntime推理
+            outputs = self.session.run(
+                self.output_names,
+                {
+                    self.input_names[0]: img1_array,
+                    self.input_names[1]: img2_array
+                }
+            )
+            logits = outputs[0][0]
         
         # 输出logits，需要sigmoid
-        logits = outputs[0][0]  # [batch] -> scalar
         similarity = 1.0 / (1.0 + np.exp(-logits))  # sigmoid
         
         return float(similarity)
