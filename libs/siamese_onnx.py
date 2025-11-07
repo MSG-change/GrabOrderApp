@@ -2,10 +2,11 @@
 """
 ONNX版本的Siamese Network推理
 使用Android ONNX Runtime (通过pyjnius调用Java API)
+无numpy依赖版本 - 使用纯Python + PIL
 """
 
-import numpy as np
 from PIL import Image
+import math
 
 try:
     # Android环境：使用pyjnius调用Java ONNX Runtime
@@ -17,14 +18,21 @@ try:
     OnnxTensor = autoclass('ai.onnxruntime.OnnxTensor')
     
     ANDROID_MODE = True
+    HAS_NUMPY = False
 except ImportError:
     # PC环境：使用Python onnxruntime
-    import onnxruntime as ort
-    ANDROID_MODE = False
+    try:
+        import onnxruntime as ort
+        import numpy as np
+        ANDROID_MODE = False
+        HAS_NUMPY = True
+    except ImportError:
+        ANDROID_MODE = False
+        HAS_NUMPY = False
 
 
 class SiameseONNX:
-    """ONNX版本的孪生网络推理器"""
+    """ONNX版本的孪生网络推理器（无numpy依赖）"""
     
     def __init__(self, model_path: str):
         """
@@ -42,7 +50,7 @@ class SiameseONNX:
             self.session = self.env.createSession(model_path)
             self.input_names = ['input1', 'input2']  # 硬编码输入名称
             self.output_names = ['output']
-        else:
+        elif HAS_NUMPY:
             # PC: 使用Python onnxruntime
             print("   使用Python ONNX Runtime")
             self.session = ort.InferenceSession(
@@ -50,13 +58,15 @@ class SiameseONNX:
                 providers=['CPUExecutionProvider']
             )
             self.input_names = [inp.name for inp in self.session.get_inputs()]
-            self.output_names = [out.name for out in self.session.get_outputs()]
+            self.output_names = [out.name for inp in self.session.get_outputs()]
+        else:
+            raise ImportError("需要numpy或Android环境")
         
         # 图像预处理参数 (ImageNet标准)
-        self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 3, 1, 1)
-        self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 3, 1, 1)
+        self.mean = [0.485, 0.456, 0.406]
+        self.std = [0.229, 0.224, 0.225]
     
-    def preprocess(self, img: Image.Image) -> np.ndarray:
+    def preprocess(self, img: Image.Image):
         """
         预处理图像
         
@@ -64,24 +74,50 @@ class SiameseONNX:
             img: PIL Image对象
         
         Returns:
-            预处理后的numpy数组 [1, 3, 224, 224]
+            预处理后的数组 [1, 3, 224, 224]
         """
         # Resize
         img = img.resize((224, 224), Image.BILINEAR)
         
-        # 转换为numpy数组 [H, W, C]
-        img_array = np.array(img, dtype=np.float32) / 255.0
-        
-        # 转换为 [C, H, W]
-        img_array = img_array.transpose(2, 0, 1)
-        
-        # 添加batch维度 [1, C, H, W]
-        img_array = np.expand_dims(img_array, axis=0)
-        
-        # 标准化
-        img_array = (img_array - self.mean) / self.std
-        
-        return img_array
+        if HAS_NUMPY:
+            # PC: 使用numpy
+            img_array = np.array(img, dtype=np.float32) / 255.0
+            img_array = img_array.transpose(2, 0, 1)
+            img_array = np.expand_dims(img_array, axis=0)
+            # 标准化
+            mean = np.array(self.mean, dtype=np.float32).reshape(1, 3, 1, 1)
+            std = np.array(self.std, dtype=np.float32).reshape(1, 3, 1, 1)
+            img_array = (img_array - mean) / std
+            return img_array
+        else:
+            # Android: 使用纯Python + Java数组
+            pixels = list(img.getdata())
+            
+            # 构建 [1, 3, 224, 224] 的Java float数组
+            # 格式：[batch, channel, height, width]
+            data = []
+            
+            # 对每个channel
+            for c in range(3):  # R, G, B
+                for y in range(224):
+                    for x in range(224):
+                        pixel = pixels[y * 224 + x]
+                        value = pixel[c] / 255.0
+                        # 标准化
+                        value = (value - self.mean[c]) / self.std[c]
+                        data.append(value)
+            
+            # 转换为Java float[]
+            from jnius import cast
+            FloatClass = autoclass('java.lang.Float')
+            float_array = autoclass('[F')
+            
+            # 创建Java float数组
+            jarray = float_array(len(data))
+            for i, val in enumerate(data):
+                jarray[i] = float(val)
+            
+            return jarray
     
     def predict(self, img1: Image.Image, img2: Image.Image) -> float:
         """
@@ -100,15 +136,23 @@ class SiameseONNX:
         
         if ANDROID_MODE:
             # Android: 使用Java ONNX Runtime推理
-            # 创建Java端的输入tensor
-            tensor1 = OnnxTensor.createTensor(self.env, img1_array)
-            tensor2 = OnnxTensor.createTensor(self.env, img2_array)
+            # 创建tensor shape: [1, 3, 224, 224]
+            shape = [1, 3, 224, 224]
+            LongClass = autoclass('java.lang.Long')
+            long_array = autoclass('[J')
+            shape_array = long_array(4)
+            for i, s in enumerate(shape):
+                shape_array[i] = LongClass(s).longValue()
             
-            # 创建输入map
-            inputs = {
-                self.input_names[0]: tensor1,
-                self.input_names[1]: tensor2
-            }
+            # 创建OnnxTensor
+            tensor1 = OnnxTensor.createTensor(self.env, img1_array, shape_array)
+            tensor2 = OnnxTensor.createTensor(self.env, img2_array, shape_array)
+            
+            # 创建输入map (Java HashMap)
+            HashMap = autoclass('java.util.HashMap')
+            inputs = HashMap()
+            inputs.put(self.input_names[0], tensor1)
+            inputs.put(self.input_names[1], tensor2)
             
             # 推理
             result = self.session.run(inputs)
@@ -132,8 +176,8 @@ class SiameseONNX:
             )
             logits = outputs[0][0]
         
-        # 输出logits，需要sigmoid
-        similarity = 1.0 / (1.0 + np.exp(-logits))  # sigmoid
+        # 输出logits，需要sigmoid（纯Python实现）
+        similarity = 1.0 / (1.0 + math.exp(-float(logits)))
         
         return float(similarity)
 

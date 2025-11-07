@@ -17,9 +17,9 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js
 version = 1.0.0
 
 # 应用需求（Python 包）
-# numpy使用p4a recipe（预编译），不从PyPI安装
+# 完全移除numpy依赖（使用纯Python + PIL + Java ONNX Runtime）
 # Android使用远程API生成W参数，不需要execjs
-requirements = python3,kivy==2.2.1,pillow,requests,numpy,pyjnius,android
+requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android
 
 # 图标和启动画面
 #icon.filename = %(source.dir)s/assets/icon.png
@@ -71,16 +71,7 @@ android.manifest.application_meta_data =
 
 # p4a额外参数
 p4a.bootstrap = sdl2
-p4a.branch = master
-
-# 使用更新的python-for-android版本（修复了一些编译问题）
-p4a.source_dir = 
-
-# 使用本地自定义recipes
-p4a.local_recipes = ./recipes
-
-# 注意：不要全局禁用setup_py，否则numpy recipe无法编译
-# p4a.setup_py = True (默认值，允许recipe使用setup.py)  
+p4a.branch = master  
 
 
 [buildozer]
