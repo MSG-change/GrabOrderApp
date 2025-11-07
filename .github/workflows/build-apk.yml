@@ -57,25 +57,25 @@ jobs:
         echo "BUILDOZER_WARN_ON_ROOT=0" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
         echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
-        echo "ACLOCAL_PATH=/usr/share/aclocal" >> $GITHUB_ENV
-        echo "PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
-        # 禁用numpy尝试编译libffi
-        echo "NPY_DISABLE_SVML=1" >> $GITHUB_ENV
-        echo "NPY_BLAS_ORDER=" >> $GITHUB_ENV
-        echo "NPY_LAPACK_ORDER=" >> $GITHUB_ENV
+        # 强制使用系统libffi，不重新编译
+        echo "LIBFFI_INCLUDEDIR=/usr/include" >> $GITHUB_ENV
+        echo "LIBFFI_LIBDIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
     
     - name: 🔨 构建APK
       run: |
         # 设置为非交互模式，自动接受许可证
         export CI=true
-        export ACLOCAL_PATH=/usr/share/aclocal
-        export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+        export LIBFFI_INCLUDEDIR=/usr/include
+        export LIBFFI_LIBDIR=/usr/lib/x86_64-linux-gnu
+        export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
         buildozer -v android debug
       env:
         BUILDOZER_WARN_ON_ROOT: 0
         CI: true
-        ACLOCAL_PATH: /usr/share/aclocal
-        PKG_CONFIG_PATH: /usr/lib/pkgconfig:/usr/share/pkgconfig
+        LIBFFI_INCLUDEDIR: /usr/include
+        LIBFFI_LIBDIR: /usr/lib/x86_64-linux-gnu
+        PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
     
     - name: 📤 上传APK
       uses: actions/upload-artifact@v4
