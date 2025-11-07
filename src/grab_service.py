@@ -51,9 +51,18 @@ class GrabOrderService:
         
         # Geetest 识别器
         try:
+            # 确定模型路径（Android vs PC）
+            if os.path.exists('/data/data'):  # Android环境
+                # Android：模型在APK的assets目录中
+                model_path = os.path.join(parent_dir, 'assets', 'best_siamese_model.onnx')
+            else:  # PC环境
+                model_path = "best_siamese_model.onnx"
+            
             self.geetest_helper = GeetestHelperLocal(
+                model_path=model_path,
                 captcha_id="045e2c229998a88721e32a763bc0f7b8"
             )
+            # W参数生成器（Android自动使用远程API，PC使用本地JS）
             self.w_generator = LocalWGenerator()
             self.log("✅ Geetest识别器加载成功")
         except Exception as e:

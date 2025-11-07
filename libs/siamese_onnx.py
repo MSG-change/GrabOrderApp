@@ -58,7 +58,7 @@ class SiameseONNX:
                 providers=['CPUExecutionProvider']
             )
             self.input_names = [inp.name for inp in self.session.get_inputs()]
-            self.output_names = [out.name for inp in self.session.get_outputs()]
+            self.output_names = [out.name for out in self.session.get_outputs()]  # 修复：out不是inp
         else:
             raise ImportError("需要numpy或Android环境")
         
