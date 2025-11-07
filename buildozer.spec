@@ -11,13 +11,14 @@ package.domain = com.graborder
 
 # 主程序入口
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,json
+source.include_exts = py,png,jpg,kv,atlas,json,onnx,js
 
 # 版本号
 version = 1.0.0
 
 # 应用需求（Python 包）
 # numpy使用p4a recipe（预编译），不从PyPI安装
+# Android使用远程API生成W参数，不需要execjs
 requirements = python3,kivy==2.2.1,pillow,requests,numpy,pyjnius,android
 
 # 图标和启动画面
@@ -75,12 +76,11 @@ p4a.branch = master
 # 使用更新的python-for-android版本（修复了一些编译问题）
 p4a.source_dir = 
 
-# 跳过有问题的依赖
-# p4a.blacklist = numpy
+# 使用本地自定义recipes
 p4a.local_recipes = ./recipes
 
-# 禁用setup.py自动安装（使用recipe）
-p4a.setup_py = False  
+# 注意：不要全局禁用setup_py，否则numpy recipe无法编译
+# p4a.setup_py = True (默认值，允许recipe使用setup.py)  
 
 
 [buildozer]

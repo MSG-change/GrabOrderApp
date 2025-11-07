@@ -12,7 +12,17 @@ from typing import Optional, Dict, List
 from PIL import Image
 import io
 from siamese_onnx import SiameseONNX
-from local_w_generator import LocalWGenerator
+
+# 根据环境选择W参数生成器
+try:
+    # Android环境：使用远程API生成器（不需要execjs）
+    from jnius import autoclass
+    from android_w_generator import AndroidWGenerator as LocalWGenerator
+    print("   使用Android W参数生成器（远程API）")
+except ImportError:
+    # PC环境：使用本地JS执行器
+    from local_w_generator import LocalWGenerator
+    print("   使用PC W参数生成器（execjs）")
 
 
 class GeetestHelperLocal:
