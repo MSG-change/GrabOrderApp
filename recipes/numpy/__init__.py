@@ -12,7 +12,8 @@ class CustomNumpyRecipe(NumpyRecipe):
     """修改后的numpy recipe，跳过libffi编译"""
     
     version = '1.21.4'
-    patches = ['skip_libffi.patch']
+    # 不使用patch，只用环境变量和site.cfg
+    patches = []
     
     def get_recipe_env(self, arch=None):
         """设置环境变量以跳过libffi编译"""
