@@ -1,0 +1,85 @@
+# Linux服务器构建APK - 完整命令
+
+## 第1步：检查磁盘空间
+
+df -h
+
+# 需要至少 20GB 可用空间（Android SDK很大）
+
+## 第2步：清理空间或更换目录
+
+# 方案A：清理当前目录
+cd /data
+du -sh * | sort -hr | head -20  # 查看大文件
+# 删除不需要的文件
+
+# 方案B：使用其他目录（推荐）
+cd /root  # 或 /tmp 或其他空间充足的目录
+df -h .   # 确认空间
+
+## 第3步：重新解压
+
+tar -xzf /data/GrabOrderApp.tar.gz
+cd GrabOrderApp
+
+## 第4步：安装依赖
+
+# Ubuntu/Debian
+apt update
+apt install -y python3-pip git zip unzip wget
+apt install -y openjdk-11-jdk
+apt install -y build-essential libssl-dev libffi-dev python3-dev
+apt install -y zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev
+
+pip3 install buildozer cython
+
+## 第5步：清理旧构建缓存（如果有）
+
+rm -rf .buildozer
+
+## 第6步：开始构建
+
+buildozer android debug
+
+# 首次构建需要 30-60 分钟
+# 需要下载约 5-10GB 数据
+
+## 第7步：检查结果
+
+ls -lh bin/*.apk
+
+## 第8步：下载到本地
+
+# 在本地Mac执行：
+# scp root@ser012401527739:/root/GrabOrderApp/bin/*.apk ./
+
+## 磁盘空间要求
+
+- 项目文件: ~100MB
+- Android SDK: ~5GB
+- Android NDK: ~2GB
+- 构建缓存: ~3GB
+- 最终APK: ~60MB
+
+总共需要: 至少 15-20GB 可用空间
+
+## 快速检查命令
+
+echo "=== 磁盘使用情况 ==="
+df -h
+
+echo ""
+echo "=== /data 目录空间 ==="
+df -h /data
+
+echo ""
+echo "=== /root 目录空间 ==="
+df -h /root
+
+echo ""
+echo "=== /tmp 目录空间 ==="
+df -h /tmp
+
+echo ""
+echo "推荐使用空间最大的目录"
+
