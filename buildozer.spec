@@ -52,6 +52,9 @@ log_level = 2
 # 安装位置
 android.install_location = auto
 
+# 自动接受SDK许可证
+android.accept_sdk_license = True
+
 # 复制文件
 android.add_src = libs,assets
 
