@@ -17,7 +17,8 @@ source.include_exts = py,png,jpg,kv,atlas,json
 version = 1.0.0
 
 # 应用需求（Python 包）
-requirements = python3,kivy==2.2.1,pillow,requests,torch==1.9.0,torchvision,numpy,pyjnius,android
+# 使用ONNX Runtime替代PyTorch，更小更快
+requirements = python3,kivy==2.2.1,pillow,requests,numpy,pyjnius,android,onnxruntime
 
 # 图标和启动画面
 #icon.filename = %(source.dir)s/assets/icon.png
