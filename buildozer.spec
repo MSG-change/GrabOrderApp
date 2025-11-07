@@ -17,8 +17,8 @@ source.include_exts = py,png,jpg,kv,atlas,json
 version = 1.0.0
 
 # 应用需求（Python 包）
-# numpy和onnxruntime使用p4a预编译版本
-requirements = python3,kivy==2.2.1,pillow,requests,numpy==1.21.4,pyjnius,android
+# numpy使用p4a recipe（预编译），不从PyPI安装
+requirements = python3,kivy==2.2.1,pillow,requests,numpy,pyjnius,android
 
 # 图标和启动画面
 #icon.filename = %(source.dir)s/assets/icon.png
@@ -73,7 +73,14 @@ p4a.bootstrap = sdl2
 p4a.branch = master
 
 # 使用更新的python-for-android版本（修复了一些编译问题）
-p4a.source_dir =  
+p4a.source_dir = 
+
+# 跳过有问题的依赖
+# p4a.blacklist = numpy
+p4a.local_recipes = ./recipes
+
+# 禁用setup.py自动安装（使用recipe）
+p4a.setup_py = False  
 
 
 [buildozer]

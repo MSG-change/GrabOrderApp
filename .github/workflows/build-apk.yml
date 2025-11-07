@@ -59,12 +59,10 @@ jobs:
         echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
         echo "ACLOCAL_PATH=/usr/share/aclocal" >> $GITHUB_ENV
         echo "PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
-        # 确保aclocal能找到libtool的m4文件
-        sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/libtool.m4 2>/dev/null || true
-        sudo ln -sf /usr/share/aclocal/ltoptions.m4 /usr/share/aclocal/ltoptions.m4 2>/dev/null || true
-        sudo ln -sf /usr/share/aclocal/ltsugar.m4 /usr/share/aclocal/ltsugar.m4 2>/dev/null || true
-        sudo ln -sf /usr/share/aclocal/ltversion.m4 /usr/share/aclocal/ltversion.m4 2>/dev/null || true
-        sudo ln -sf /usr/share/aclocal/lt~obsolete.m4 /usr/share/aclocal/lt~obsolete.m4 2>/dev/null || true
+        # 禁用numpy尝试编译libffi
+        echo "NPY_DISABLE_SVML=1" >> $GITHUB_ENV
+        echo "NPY_BLAS_ORDER=" >> $GITHUB_ENV
+        echo "NPY_LAPACK_ORDER=" >> $GITHUB_ENV
     
     - name: 🔨 构建APK
       run: |

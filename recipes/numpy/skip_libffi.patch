@@ -1,0 +1,17 @@
+--- a/numpy/random/setup.py
++++ b/numpy/random/setup.py
+@@ -1,3 +1,4 @@
++import os
+ def configuration(parent_package='', top_path=None):
+     from numpy.distutils.misc_util import Configuration, get_mathlibs
+     config = Configuration('random', parent_package, top_path)
+@@ -10,7 +11,8 @@ def configuration(parent_package='', top_path=None):
+     # Also, link libm only on linux, freebsd & darwin
+     mathlib = []
+     if sys.platform != 'win32':
+-        mathlib = get_mathlibs()
++        # Skip libffi dependency check for Android
++        mathlib = ['m'] if not os.environ.get('ANDROID_API') else []
+     
+     return config
+
