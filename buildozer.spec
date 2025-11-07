@@ -29,7 +29,7 @@ android.permissions = INTERNET,ACCESS_NETWORK_STATE,WRITE_EXTERNAL_STORAGE,READ_
 # Android API 版本
 android.api = 31
 android.minapi = 21
-android.ndk = 23b
+android.ndk = 25b
 
 # Android 架构
 android.archs = arm64-v8a,armeabi-v7a
