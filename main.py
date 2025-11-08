@@ -496,9 +496,12 @@ class MainScreen(BoxLayout):
             self._on_start_success()
             
         except Exception as e:
+            log_print(f"❌ BACKGROUND THREAD ERROR: {e}")
             self.add_log(f"ERROR: Failed to start: {e}")
             import traceback
-            self.add_log(traceback.format_exc()[:300])
+            error_trace = traceback.format_exc()
+            log_print(error_trace)
+            self.add_log(error_trace[:500])
             self._on_start_failed()
     
     @mainthread
