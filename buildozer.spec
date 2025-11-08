@@ -13,16 +13,16 @@ package.domain = com.graborder
 source.dir = .
 source.entry_point = main.py
 source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
-source.include_patterns = assets/*,libs/*,src/*,fonts/*
+source.include_patterns = assets/*,libs/*,src/*
 
 # 版本号
-version = 1.1.2
+version = 1.1.3
 
 # 应用需求（Python 包）
 # 完全移除numpy依赖（使用纯Python + PIL + Java ONNX Runtime）
 # Android使用远程API生成W参数，不需要execjs
-# ✅ frida-tools包含frida库，用于Hook和动态分析
-requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android,frida-tools
+# ✅ frida库用于Hook和动态分析（Android环境使用frida而不是frida-tools更轻量）
+requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android,frida
 
 # 图标和启动画面
 #icon.filename = %(source.dir)s/assets/icon.png

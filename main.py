@@ -667,7 +667,7 @@ class FastGrabOrderApp(App):
             ]
             request_permissions(permissions)
         except Exception as e:
-            log_print(f"权限请求失败: {e}")
+            log_print(f"Permission request failed: {e}")
     
     def on_pause(self):
         """应用进入后台 - 保持运行"""
