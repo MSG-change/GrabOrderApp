@@ -97,6 +97,20 @@ class MainScreen(BoxLayout):
     log_text = StringProperty("")
     is_running = BooleanProperty(False)
     
+    # 字体名称（如果字体加载成功）
+    _font_name = None
+    
+    @classmethod
+    def set_font_name(cls, font_name):
+        """设置字体名称"""
+        cls._font_name = font_name
+    
+    def _get_font_kwargs(self):
+        """获取字体参数"""
+        if self._font_name:
+            return {'font_name': self._font_name}
+        return {}
+    
     def __init__(self, **kwargs):
         log_print("=" * 50)
         log_print("🔧 MainScreen.__init__ 开始")
@@ -185,6 +199,10 @@ class MainScreen(BoxLayout):
         """构建用户界面"""
         log_print("🔧 build_ui() 开始")
         
+        # 获取字体参数
+        font_kwargs = self._get_font_kwargs()
+        log_print(f"   字体参数: {font_kwargs}")
+        
         try:
             # 标题
             log_print("   创建标题...")
@@ -192,7 +210,8 @@ class MainScreen(BoxLayout):
                 text='🚀 抢单助手',
                 size_hint_y=0.1,
                 font_size='24sp',
-                bold=True
+                bold=True,
+                **font_kwargs
             )
             self.add_widget(title)
             log_print("   ✅ 标题添加完成")
@@ -203,17 +222,18 @@ class MainScreen(BoxLayout):
         
         # 状态显示
         status_box = BoxLayout(size_hint_y=0.1, spacing=10)
-        status_box.add_widget(Label(text='状态:', size_hint_x=0.3))
+        status_box.add_widget(Label(text='状态:', size_hint_x=0.3, **font_kwargs))
         self.status_label = Label(
             text=self.status_text,
             size_hint_x=0.7,
-            color=(0, 1, 0, 1)
+            color=(0, 1, 0, 1),
+            **font_kwargs
         )
         status_box.add_widget(self.status_label)
         self.add_widget(status_box)
         
         # Token 输入
-        token_label = Label(text='Token (手动输入):', size_hint_y=0.05)
+        token_label = Label(text='Token (手动输入):', size_hint_y=0.05, **font_kwargs)
         self.add_widget(token_label)
         
         self.token_input = TextInput(
@@ -221,7 +241,8 @@ class MainScreen(BoxLayout):
             multiline=False,
             size_hint_y=0.1,
             font_size='12sp',
-            hint_text='粘贴 Authorization Token...'
+            hint_text='Paste Authorization Token...',  # 英文提示，避免字体问题
+            **font_kwargs
         )
         self.add_widget(self.token_input)
         
@@ -230,7 +251,8 @@ class MainScreen(BoxLayout):
             text='保存Token',
             size_hint_y=0.08,
             background_color=(0, 0.5, 0.8, 1),
-            on_press=self.save_token
+            on_press=self.save_token,
+            **font_kwargs
         )
         self.add_widget(save_token_btn)
         
@@ -240,7 +262,8 @@ class MainScreen(BoxLayout):
         self.start_btn = Button(
             text='启动抢单',
             background_color=(0, 0.7, 0, 1),
-            on_press=self.start_service
+            on_press=self.start_service,
+            **font_kwargs
         )
         btn_box.add_widget(self.start_btn)
         
@@ -248,7 +271,8 @@ class MainScreen(BoxLayout):
             text='停止',
             background_color=(0.7, 0, 0, 1),
             disabled=True,
-            on_press=self.stop_service
+            on_press=self.stop_service,
+            **font_kwargs
         )
         btn_box.add_widget(self.stop_btn)
         
@@ -256,7 +280,7 @@ class MainScreen(BoxLayout):
         
         # VPN 抓包开关
         vpn_box = BoxLayout(size_hint_y=0.08, spacing=10)
-        vpn_label = Label(text='VPN自动抓包:', size_hint_x=0.6)
+        vpn_label = Label(text='VPN自动抓包:', size_hint_x=0.6, **font_kwargs)
         vpn_box.add_widget(vpn_label)
         self.vpn_switch = Switch(active=False, size_hint_x=0.4)
         self.vpn_switch.bind(active=self.toggle_vpn)
@@ -267,7 +291,8 @@ class MainScreen(BoxLayout):
         log_label = Label(
             text='运行日志:',
             size_hint_y=0.05,
-            halign='left'
+            halign='left',
+            **font_kwargs
         )
         self.add_widget(log_label)
         
@@ -278,7 +303,8 @@ class MainScreen(BoxLayout):
             halign='left',
             valign='top',
             font_size='12sp',
-            color=(0.8, 0.8, 0.8, 1)
+            color=(0.8, 0.8, 0.8, 1),
+            **font_kwargs
         )
         self.log_display.bind(texture_size=self.log_display.setter('size'))
         scroll.add_widget(self.log_display)
@@ -472,8 +498,16 @@ class GrabOrderApp(App):
     
     def build(self):
         """构建应用"""
+        # 立即输出，确保即使后续出错也能看到
+        try:
+            print("=" * 50)
+            print("🚀 GrabOrderApp.build() 开始")
+            print("=" * 50)
+        except:
+            pass
+        
         log_print("=" * 50)
-        log_print("🚀 GrabOrderApp.build() 开始")
+        log_print("🚀 GrabOrderApp.build() 开始 (log_print)")
         log_print("=" * 50)
         
         try:
@@ -482,49 +516,76 @@ class GrabOrderApp(App):
             log_print("✅ 窗口颜色设置完成")
         except Exception as e:
             log_print(f"❌ 窗口颜色设置失败: {e}")
+            import traceback
+            log_print(traceback.format_exc())
         
         try:
             log_print("🔧 注册中文字体...")
-            self.register_fonts()
-            log_print("✅ 字体注册完成")
+            font_name = self.register_fonts()
+            if font_name:
+                MainScreen.set_font_name(font_name)
+                log_print(f"✅ 字体注册完成，字体名称: {font_name}")
+            else:
+                log_print("⚠️ 字体注册失败，将使用系统默认字体")
         except Exception as e:
             log_print(f"❌ 字体注册失败: {e}")
             import traceback
             log_print(traceback.format_exc())
             # 继续执行，不因为字体失败而停止
         
-        try:
-            if ANDROID:
-                log_print("🔧 请求Android权限...")
-                self.request_android_permissions()
-                log_print("✅ 权限请求完成")
-            else:
-                log_print("💻 PC环境，跳过权限请求")
-        except Exception as e:
-            log_print(f"❌ 权限请求失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-            # 继续执行，不因为权限失败而停止
+        # 权限请求移到创建MainScreen之后，使用延迟请求
+        # 这样不会阻塞UI的创建
+        if ANDROID:
+            log_print("🔧 Android环境，将在UI创建后请求权限")
+        else:
+            log_print("💻 PC环境，跳过权限请求")
         
         try:
             log_print("🔧 创建MainScreen...")
             screen = MainScreen()
             log_print("✅ MainScreen创建完成")
+            
+            # 在UI创建后延迟请求权限（避免阻塞UI显示）
+            if ANDROID:
+                def request_permissions_delayed(dt):
+                    try:
+                        log_print("🔧 延迟请求Android权限...")
+                        self.request_android_permissions()
+                        log_print("✅ 权限请求完成")
+                    except Exception as e:
+                        log_print(f"❌ 权限请求失败: {e}")
+                
+                Clock.schedule_once(request_permissions_delayed, 0.5)
+            
             log_print("=" * 50)
             log_print("🎉 GrabOrderApp.build() 完成")
             log_print("=" * 50)
             return screen
         except Exception as e:
-            log_print(f"❌ MainScreen创建失败: {e}")
+            log_print("=" * 50)
+            log_print("❌ MainScreen创建失败!")
+            log_print("=" * 50)
+            log_print(f"错误: {e}")
             import traceback
-            log_print(traceback.format_exc())
+            error_trace = traceback.format_exc()
+            log_print(error_trace)
+            log_print("=" * 50)
             # 返回一个最简单的Label显示错误
-            error_label = Label(
-                text=f"启动失败: {e}\n\n请查看日志",
-                color=(1, 0, 0, 1),
-                text_size=(Window.width - 40, None)
-            )
-            return error_label
+            try:
+                error_label = Label(
+                    text=f"启动失败\n\n错误: {str(e)}\n\n请查看logcat日志获取详细信息",
+                    color=(1, 0, 0, 1),
+                    halign='center',
+                    valign='middle',
+                    text_size=(Window.width - 40, None) if hasattr(Window, 'width') else (None, None),
+                    font_size='18sp'
+                )
+                log_print("✅ 错误Label创建成功")
+                return error_label
+            except Exception as e2:
+                log_print(f"❌ 连错误Label都创建失败: {e2}")
+                # 最后的备用方案：返回None，让Kivy使用默认界面
+                return None
     
     def register_fonts(self):
         """注册中文字体"""
@@ -536,64 +597,168 @@ class GrabOrderApp(App):
             # 获取字体路径
             if ANDROID:
                 # Android：尝试多个可能的路径
+                log_print("   📱 Android环境：开始加载字体")
                 base_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else '.'
                 font_paths = [
+                    os.path.join(os.getcwd(), 'fonts', 'DroidSansFallback.ttf'),
                     os.path.join(base_dir, 'fonts', 'DroidSansFallback.ttf'),
+                    '/data/data/com.graborder.graborder/files/app/fonts/DroidSansFallback.ttf',
                     '/data/data/com.graborder.graborder/files/fonts/DroidSansFallback.ttf',
                     'fonts/DroidSansFallback.ttf',
                     './fonts/DroidSansFallback.ttf',
+                    # Kivy Android assets路径
+                    os.path.join(os.path.dirname(__file__) if '__file__' in globals() else '.', 'fonts', 'DroidSansFallback.ttf'),
                 ]
+                
+                font_loaded = False
+                for font_path in font_paths:
+                    try:
+                        abs_path = os.path.abspath(font_path) if not os.path.isabs(font_path) else font_path
+                        log_print(f"   📱 尝试路径: {font_path}")
+                        log_print(f"      绝对路径: {abs_path}")
+                        if os.path.exists(font_path) or os.path.exists(abs_path):
+                            actual_path = font_path if os.path.exists(font_path) else abs_path
+                            log_print(f"   ✅ 文件存在: {actual_path}")
+                            # 注册为自定义字体名称
+                            LabelBase.register(
+                                name='DroidSansFallback',
+                                fn_regular=actual_path
+                            )
+                            # 也注册为默认字体（覆盖Roboto）
+                            LabelBase.register(
+                                name='Roboto',
+                                fn_regular=actual_path
+                            )
+                            log_print(f"✅ Android字体加载成功: {actual_path}")
+                            font_loaded = True
+                            return 'DroidSansFallback'
+                        else:
+                            log_print(f"   ❌ 文件不存在")
+                    except Exception as e:
+                        log_print(f"   ⚠️ 路径 {font_path} 检查失败: {e}")
+                        import traceback
+                        log_print(traceback.format_exc())
+                        continue
+                
+                if not font_loaded:
+                    log_print("⚠️ Android：未找到字体文件，将使用系统默认字体（可能显示方块）")
+                    log_print("   请确保字体文件存在于以下位置之一:")
+                    for path in font_paths:
+                        log_print(f"     - {path}")
+                    return None
             else:
-                # PC：相对路径
-                font_paths = [
-                    'fonts/DroidSansFallback.ttf',
-                    './fonts/DroidSansFallback.ttf',
-                ]
-            
-            font_loaded = False
-            for font_path in font_paths:
-                try:
-                    abs_path = os.path.abspath(font_path)
-                    log_print(f"   尝试路径: {font_path} (绝对路径: {abs_path})")
-                    if os.path.exists(font_path):
-                        log_print(f"   ✅ 文件存在")
-                        # 注册为默认字体
-                        LabelBase.register(
-                            name='Roboto',  # Kivy默认字体名称
-                            fn_regular=font_path
-                        )
-                        log_print(f"✅ 中文字体加载成功: {font_path}")
-                        font_loaded = True
-                        break
-                    else:
-                        log_print(f"   ❌ 文件不存在")
-                except Exception as e:
-                    log_print(f"   ⚠️ 路径 {font_path} 检查失败: {e}")
-                    continue
-            
-            if not font_loaded:
-                log_print(f"⚠️ 未找到字体文件，使用系统默认字体（可能显示方块）")
-                log_print(f"   请确保字体文件存在于以下位置之一:")
-                for path in font_paths:
-                    log_print(f"     - {path}")
+                # PC：尝试使用系统自带的中文字体
+                import platform
+                system = platform.system()
+                
+                if system == 'Darwin':  # macOS
+                    # Mac系统自带中文字体路径
+                    mac_font_paths = [
+                        '/System/Library/Fonts/PingFang.ttc',
+                        '/System/Library/Fonts/STHeiti Light.ttc',
+                        '/System/Library/Fonts/STHeiti Medium.ttc',
+                        '/Library/Fonts/Arial Unicode.ttf',
+                    ]
+                    
+                    for font_path in mac_font_paths:
+                        if os.path.exists(font_path):
+                            try:
+                                log_print(f"   💻 尝试使用Mac系统字体: {font_path}")
+                                LabelBase.register(
+                                    name='DroidSansFallback',
+                                    fn_regular=font_path
+                                )
+                                LabelBase.register(
+                                    name='Roboto',
+                                    fn_regular=font_path
+                                )
+                                log_print(f"✅ Mac系统字体加载成功: {font_path}")
+                                return 'DroidSansFallback'
+                            except Exception as e:
+                                log_print(f"   ⚠️ 系统字体加载失败: {e}")
+                                continue
+                    
+                    # 如果系统字体都失败，尝试项目字体
+                    log_print("   💻 系统字体加载失败，尝试项目字体...")
+                    font_paths = [
+                        'fonts/DroidSansFallback.ttf',
+                        './fonts/DroidSansFallback.ttf',
+                        os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
+                    ]
+                    for font_path in font_paths:
+                        if os.path.exists(font_path):
+                            try:
+                                abs_path = os.path.abspath(font_path)
+                                log_print(f"   尝试路径: {font_path} (绝对路径: {abs_path})")
+                                LabelBase.register(
+                                    name='DroidSansFallback',
+                                    fn_regular=abs_path
+                                )
+                                LabelBase.register(
+                                    name='Roboto',
+                                    fn_regular=abs_path
+                                )
+                                log_print(f"✅ 项目字体加载成功: {font_path}")
+                                return 'DroidSansFallback'
+                            except Exception as e:
+                                log_print(f"   ⚠️ 项目字体加载失败: {e}")
+                                continue
+                    
+                    log_print("   ⚠️ 所有字体加载失败，使用系统默认字体")
+                    return None
+                else:
+                    # Linux/Windows：尝试加载项目字体
+                    font_paths = [
+                        'fonts/DroidSansFallback.ttf',
+                        './fonts/DroidSansFallback.ttf',
+                        os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
+                    ]
+                    for font_path in font_paths:
+                        if os.path.exists(font_path):
+                            try:
+                                abs_path = os.path.abspath(font_path)
+                                LabelBase.register(
+                                    name='DroidSansFallback',
+                                    fn_regular=abs_path
+                                )
+                                log_print(f"✅ 字体加载成功: {font_path}")
+                                return 'DroidSansFallback'
+                            except Exception as e:
+                                log_print(f"   ⚠️ 字体加载失败: {e}")
+                                continue
+                    log_print("   ⚠️ 字体加载失败，使用系统默认字体")
+                    return None
                 
         except Exception as e:
             log_print(f"❌ 字体加载过程出错: {e}")
             import traceback
             log_print(traceback.format_exc())
             log_print("⚠️ 继续使用系统默认字体")
+            return None
     
     def request_android_permissions(self):
         """请求Android权限"""
-        permissions = [
-            Permission.INTERNET,
-            Permission.ACCESS_NETWORK_STATE,
-            Permission.WRITE_EXTERNAL_STORAGE,
-            Permission.READ_EXTERNAL_STORAGE,
-            Permission.SYSTEM_ALERT_WINDOW,  # 悬浮窗
-            Permission.FOREGROUND_SERVICE,    # 前台服务
-        ]
-        request_permissions(permissions)
+        try:
+            # 只请求基本的必要权限
+            permissions = [
+                Permission.INTERNET,
+                Permission.ACCESS_NETWORK_STATE,
+            ]
+            
+            # 尝试请求可选权限（如果存在）
+            try:
+                permissions.append(Permission.WRITE_EXTERNAL_STORAGE)
+                permissions.append(Permission.READ_EXTERNAL_STORAGE)
+            except:
+                log_print("⚠️ 存储权限不可用（可能Android版本较新）")
+            
+            log_print(f"🔧 请求权限: {permissions}")
+            request_permissions(permissions)
+            log_print("✅ 权限请求已发送")
+        except Exception as e:
+            log_print(f"❌ 权限请求出错: {e}")
+            import traceback
+            log_print(traceback.format_exc())
     
     def on_pause(self):
         """应用暂停（保持后台运行）"""
@@ -605,20 +770,166 @@ class GrabOrderApp(App):
 
 
 if __name__ == '__main__':
+    # 立即输出启动信息（使用print确保在log_print初始化之前也能看到）
+    try:
+        print("=" * 50)
+        print("🚀 抢单助手启动")
+        print("=" * 50)
+        print(f"Python版本: {sys.version}")
+        print(f"工作目录: {os.getcwd()}")
+        print(f"Android模式: {ANDROID}")
+        print("=" * 50)
+    except:
+        pass
+    
     log_print("=" * 50)
-    log_print("🚀 抢单助手启动")
+    log_print("🚀 抢单助手启动 (log_print)")
     log_print("=" * 50)
     log_print(f"Python版本: {sys.version}")
     log_print(f"工作目录: {os.getcwd()}")
     log_print(f"Android模式: {ANDROID}")
     log_print("=" * 50)
     
+    # 预加载字体（在应用启动前）
+    if not ANDROID:
+        # PC环境：尝试加载Mac系统字体或项目字体
+        import platform
+        system = platform.system()
+        
+        if system == 'Darwin':  # macOS
+            font_loaded = False
+            # 首先尝试Mac系统字体
+            mac_font_paths = [
+                '/System/Library/Fonts/PingFang.ttc',
+                '/System/Library/Fonts/STHeiti Light.ttc',
+                '/System/Library/Fonts/STHeiti Medium.ttc',
+                '/Library/Fonts/Arial Unicode.ttf',
+            ]
+            
+            for font_path in mac_font_paths:
+                if os.path.exists(font_path):
+                    try:
+                        LabelBase.register(
+                            name='DroidSansFallback',
+                            fn_regular=font_path
+                        )
+                        LabelBase.register(
+                            name='Roboto',
+                            fn_regular=font_path
+                        )
+                        MainScreen.set_font_name('DroidSansFallback')
+                        log_print(f"✅ Mac系统字体预加载成功: {font_path}")
+                        font_loaded = True
+                        break
+                    except Exception as e:
+                        log_print(f"⚠️ Mac系统字体预加载失败: {e}")
+                        continue
+            
+            # 如果系统字体失败，尝试项目字体
+            if not font_loaded:
+                font_paths = [
+                    'fonts/DroidSansFallback.ttf',
+                    './fonts/DroidSansFallback.ttf',
+                    os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
+                ]
+                for font_path in font_paths:
+                    if os.path.exists(font_path):
+                        try:
+                            abs_path = os.path.abspath(font_path)
+                            LabelBase.register(
+                                name='DroidSansFallback',
+                                fn_regular=abs_path
+                            )
+                            LabelBase.register(
+                                name='Roboto',
+                                fn_regular=abs_path
+                            )
+                            MainScreen.set_font_name('DroidSansFallback')
+                            log_print(f"✅ 项目字体预加载成功: {font_path}")
+                            font_loaded = True
+                            break
+                        except Exception as e:
+                            log_print(f"⚠️ 项目字体预加载失败: {e}")
+                            continue
+            
+            if not font_loaded:
+                log_print("⚠️ PC环境：所有字体预加载失败，将使用系统默认字体（中文可能显示为方块）")
+        else:
+            # Linux/Windows：尝试加载项目字体
+            font_paths = [
+                'fonts/DroidSansFallback.ttf',
+                './fonts/DroidSansFallback.ttf',
+                os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
+            ]
+            font_loaded = False
+            for font_path in font_paths:
+                if os.path.exists(font_path):
+                    try:
+                        LabelBase.register(
+                            name='DroidSansFallback',
+                            fn_regular=font_path
+                        )
+                        LabelBase.register(
+                            name='Roboto',
+                            fn_regular=font_path
+                        )
+                        MainScreen.set_font_name('DroidSansFallback')
+                        log_print(f"✅ 字体预加载成功: {font_path}")
+                        font_loaded = True
+                        break
+                    except Exception as e:
+                        log_print(f"⚠️ 字体预加载失败: {e}")
+                        continue
+            if not font_loaded:
+                log_print("⚠️ PC环境：字体预加载失败，将使用系统默认字体")
+    else:
+        try:
+            font_paths = [
+                'fonts/DroidSansFallback.ttf',
+                './fonts/DroidSansFallback.ttf',
+                os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
+            ]
+            font_loaded = False
+            for font_path in font_paths:
+                if os.path.exists(font_path):
+                    try:
+                        LabelBase.register(
+                            name='DroidSansFallback',
+                            fn_regular=font_path
+                        )
+                        LabelBase.register(
+                            name='Roboto',
+                            fn_regular=font_path
+                        )
+                        MainScreen.set_font_name('DroidSansFallback')
+                        log_print(f"✅ 字体预加载成功: {font_path}")
+                        font_loaded = True
+                        break
+                    except Exception as e:
+                        log_print(f"⚠️ 字体注册失败: {e}")
+                        continue
+            if not font_loaded:
+                log_print("⚠️ 未找到字体文件，将使用系统默认字体")
+        except Exception as e:
+            log_print(f"⚠️ 字体预加载失败: {e}")
+    
     try:
+        print("🔧 准备创建GrabOrderApp实例...")
+        log_print("🔧 准备创建GrabOrderApp实例...")
         app = GrabOrderApp()
+        print("✅ GrabOrderApp实例创建成功")
         log_print("✅ GrabOrderApp实例创建成功")
+        print("🔧 开始运行应用...")
         log_print("🔧 开始运行应用...")
         app.run()
     except Exception as e:
+        print("=" * 50)
+        print("❌ 应用启动失败！")
+        print(f"错误: {e}")
+        import traceback
+        print(traceback.format_exc())
+        print("=" * 50)
+        
         log_print("=" * 50)
         log_print("❌ 应用启动失败！")
         log_print("=" * 50)
