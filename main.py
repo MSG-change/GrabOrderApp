@@ -401,17 +401,26 @@ class MainScreen(BoxLayout):
             self.start_btn.disabled = True
             self.stop_btn.disabled = False
             
+            # ✅ 在主线程中读取所有UI值（避免后台线程访问UI）
+            ui_config = {
+                'target_package': self.package_input.text.strip() or self.target_package,
+                'interval_text': self.interval_spinner.text,
+                'category_id': self.category_input.text.strip() or '2469'
+            }
+            
             # 在后台线程启动
-            threading.Thread(target=self._start_services_background, daemon=True).start()
+            threading.Thread(target=self._start_services_background, args=(ui_config,), daemon=True).start()
         except Exception as e:
             log_print(f"❌ START FAILED AT BEGINNING: {e}")
             import traceback
             log_print(traceback.format_exc())
     
-    def _start_services_background(self):
-        """后台启动所有服务"""
+    def _start_services_background(self, ui_config):
+        """后台启动所有服务（线程安全）"""
         try:
             log_print("🔵 BACKGROUND THREAD STARTED")  # 调试日志
+            log_print(f"📋 Config: {ui_config}")  # 调试日志
+            
             # 1. 启动 Frida Server
             self.add_log("")
             self.add_log("[Step 1/4] Starting Frida Server")
@@ -442,7 +451,8 @@ class MainScreen(BoxLayout):
                 self._on_start_failed()
                 return
             
-            target_package = self.package_input.text.strip() or self.target_package
+            # ✅ 使用传入的配置，而不是直接访问UI
+            target_package = ui_config['target_package']
             
             self.hook_service = AutoHookService(
                 target_package=target_package,
@@ -474,8 +484,8 @@ class MainScreen(BoxLayout):
                 log_callback=self.add_log
             )
             
-            # 设置参数
-            interval_text = self.interval_spinner.text
+            # ✅ 使用传入的配置，而不是直接访问UI
+            interval_text = ui_config['interval_text']
             if '0.5' in interval_text:
                 self.grab_service.check_interval = 0.5
             elif '1' in interval_text:
@@ -485,7 +495,7 @@ class MainScreen(BoxLayout):
             else:
                 self.grab_service.check_interval = 3
             
-            self.grab_service.category_id = self.category_input.text.strip() or '2469'
+            self.grab_service.category_id = ui_config['category_id']
             
             # 4. 等待 Token
             self.add_log("")
