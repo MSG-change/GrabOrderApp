@@ -18,9 +18,15 @@ import os
 is_android = os.path.exists('/data/data') or os.path.exists('/system/bin/app_process')
 
 if is_android:
-    # Android环境：强制使用远程API（避免execjs依赖）
-    print("   🤖 Android环境 → 使用远程API生成W参数")
-    from android_w_generator import AndroidWGenerator as LocalWGenerator
+    # Android环境：使用本地 WebView 方案
+    print("   🤖 Android环境 → 使用本地 WebView 生成W参数")
+    try:
+        from android_local_w_generator import AndroidLocalWGenerator as LocalWGenerator
+        print("      ✅ AndroidLocalWGenerator 加载成功")
+    except ImportError as e:
+        print(f"      ⚠️ AndroidLocalWGenerator 加载失败: {e}")
+        print("      → 回退到远程API")
+        from android_w_generator import AndroidWGenerator as LocalWGenerator
 else:
     # PC环境：尝试使用本地JS
     print("   💻 PC环境 → 尝试使用本地JS生成W参数")
