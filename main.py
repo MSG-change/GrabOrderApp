@@ -416,75 +416,79 @@ class MainScreen(BoxLayout):
             log_print(traceback.format_exc())
     
     def _start_services_background(self, ui_config):
-        """后台启动所有服务（线程安全）"""
+        """后台启动所有服务（使用异步日志避免死锁）"""
         try:
-            log_print("🔵 BACKGROUND THREAD STARTED")  # 调试日志
-            log_print(f"📋 Config: {ui_config}")  # 调试日志
+            log_print("🔵 BACKGROUND THREAD STARTED")
+            log_print(f"📋 Config: {ui_config}")
+            
+            # 使用 _add_log_direct 替代 add_log（避免 @mainthread 阻塞）
             
             # 1. 启动 Frida Server
-            self.add_log("")
-            self.add_log("[Step 1/4] Starting Frida Server")
-            self.add_log("-" * 50)
+            self._add_log_direct("")
+            self._add_log_direct("[Step 1/4] Starting Frida Server")
+            self._add_log_direct("-" * 50)
             
             if not FRIDA_MANAGER_AVAILABLE:
-                self.add_log("ERROR: Frida Manager not available")
+                self._add_log_direct("ERROR: Frida Manager not available")
                 self._on_start_failed()
                 return
             
-            self.frida_manager = FridaManager(log_callback=self.add_log)
+            # 创建一个wrapper，让FridaManager使用非阻塞日志
+            def log_callback(msg):
+                self._add_log_direct(msg)
+            
+            self.frida_manager = FridaManager(log_callback=log_callback)
             
             if not self.frida_manager.start_frida_server():
-                self.add_log("ERROR: Failed to start Frida Server")
+                self._add_log_direct("ERROR: Failed to start Frida Server")
                 self._on_start_failed()
                 return
             
             self.frida_status = "Running"
-            self.frida_card.set_value("Running", (0.3, 0.9, 0.3, 1))
+            Clock.schedule_once(lambda dt: self.frida_card.set_value("Running", (0.3, 0.9, 0.3, 1)), 0)
             
             # 2. 启动 Hook 服务
-            self.add_log("")
-            self.add_log("[Step 2/4] Starting Hook Service")
-            self.add_log("-" * 50)
+            self._add_log_direct("")
+            self._add_log_direct("[Step 2/4] Starting Hook Service")
+            self._add_log_direct("-" * 50)
             
             if not AUTO_HOOK_AVAILABLE:
-                self.add_log("ERROR: Hook Service not available")
+                self._add_log_direct("ERROR: Hook Service not available")
                 self._on_start_failed()
                 return
             
-            # ✅ 使用传入的配置，而不是直接访问UI
             target_package = ui_config['target_package']
             
             self.hook_service = AutoHookService(
                 target_package=target_package,
-                log_callback=self.add_log
+                log_callback=log_callback
             )
             
             self.hook_service.set_token_callback(self.on_token_captured)
             
             if not self.hook_service.start():
-                self.add_log("ERROR: Failed to start Hook Service")
+                self._add_log_direct("ERROR: Failed to start Hook Service")
                 self._on_start_failed()
                 return
             
             self.hook_status = "Connecting"
-            self.hook_card.set_value("Connecting", (1, 0.8, 0.3, 1))
+            Clock.schedule_once(lambda dt: self.hook_card.set_value("Connecting", (1, 0.8, 0.3, 1)), 0)
             
             # 3. 初始化抢单服务
-            self.add_log("")
-            self.add_log("[Step 3/4] Initializing Grab Service")
-            self.add_log("-" * 50)
+            self._add_log_direct("")
+            self._add_log_direct("[Step 3/4] Initializing Grab Service")
+            self._add_log_direct("-" * 50)
             
             if not GRAB_SERVICE_AVAILABLE:
-                self.add_log("ERROR: Grab Service not available")
+                self._add_log_direct("ERROR: Grab Service not available")
                 self._on_start_failed()
                 return
             
             self.grab_service = FastGrabOrderService(
                 api_base_url=self.api_base_url,
-                log_callback=self.add_log
+                log_callback=log_callback
             )
             
-            # ✅ 使用传入的配置，而不是直接访问UI
             interval_text = ui_config['interval_text']
             if '0.5' in interval_text:
                 self.grab_service.check_interval = 0.5
@@ -498,21 +502,21 @@ class MainScreen(BoxLayout):
             self.grab_service.category_id = ui_config['category_id']
             
             # 4. 等待 Token
-            self.add_log("")
-            self.add_log("[Step 4/4] Waiting for Token")
-            self.add_log("-" * 50)
-            self.add_log("Please operate in target app")
-            self.add_log("  e.g. Open order list")
+            self._add_log_direct("")
+            self._add_log_direct("[Step 4/4] Waiting for Token")
+            self._add_log_direct("-" * 50)
+            self._add_log_direct("Please operate in target app")
+            self._add_log_direct("  e.g. Open order list")
             
             self._on_start_success()
             
         except Exception as e:
             log_print(f"❌ BACKGROUND THREAD ERROR: {e}")
-            self.add_log(f"ERROR: Failed to start: {e}")
+            self._add_log_direct(f"ERROR: Failed to start: {e}")
             import traceback
             error_trace = traceback.format_exc()
             log_print(error_trace)
-            self.add_log(error_trace[:500])
+            self._add_log_direct(error_trace[:500])
             self._on_start_failed()
     
     @mainthread
@@ -594,9 +598,29 @@ class MainScreen(BoxLayout):
         
         self.add_log("All services stopped")
     
+    def _add_log_direct(self, message):
+        """直接添加日志到buffer（供后台线程使用，通过Clock异步更新UI）"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        log_line = f"[{timestamp}] {message}"
+        
+        # 直接操作buffer（线程安全的列表操作）
+        self.log_buffer.append(log_line)
+        if len(self.log_buffer) > self.max_logs:
+            self.log_buffer.pop(0)
+        
+        self.log_text = '\n'.join(self.log_buffer)
+        
+        # 异步调度UI更新（不阻塞）
+        Clock.schedule_once(lambda dt: self._update_log_display(), 0)
+    
+    @mainthread
+    def _update_log_display(self):
+        """更新日志显示（在主线程执行）"""
+        self.log_display.text = self.log_text
+    
     @mainthread
     def add_log(self, message):
-        """添加日志（线程安全）"""
+        """添加日志（线程安全，主线程调用）"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_line = f"[{timestamp}] {message}"
         
