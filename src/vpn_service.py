@@ -245,11 +245,14 @@ class VPNTokenCapture:
         """停止 VPN 服务"""
         self.running = False
         
-        if ANDROID and self.vpn_service:
+        # 关闭VPN接口
+        if ANDROID and hasattr(self, 'vpn_interface') and self.vpn_interface:
             try:
-                self.vpn_service.stopSelf()
-            except:
-                pass
+                # 关闭VPN接口
+                self.vpn_interface.close()
+                self.vpn_interface = None
+            except Exception as e:
+                self.log(f"⚠️ 关闭VPN接口时出错: {e}")
         
         self.log("⏹️ VPN抓包服务已停止")
     

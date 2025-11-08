@@ -59,6 +59,8 @@ from kivy.clock import Clock, mainthread
 from kivy.properties import StringProperty, BooleanProperty
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
+from kivy.config import Config
+from kivy.resources import resource_add_path
 
 # Android 权限
 try:
@@ -108,14 +110,11 @@ class MainScreen(BoxLayout):
     
     def _get_font_kwargs(self):
         """获取字体参数"""
-        # 在Android上，完全移除字体参数，使用系统默认字体
-        # Android系统自带中文字体，可以正常显示中文，无需自定义字体
-        if ANDROID:
-            return {}  # 不使用任何字体参数，让系统自动处理
-        
-        # PC环境：尝试使用注册的字体
+        # 如果设置了字体名称，使用它（包括Android上加载的系统字体）
         if self._font_name:
             return {'font_name': self._font_name}
+        
+        # 否则不使用任何字体参数，让Kivy使用默认字体
         return {}
     
     def __init__(self, **kwargs):
@@ -679,11 +678,96 @@ class GrabOrderApp(App):
             import traceback
             log_print(traceback.format_exc())
         
-        # 在Android上，不注册自定义字体，使用系统默认字体
-        # Android系统自带中文字体，可以正常显示中文
+        # 在Android上，尝试加载中文字体（使用resource_add_path方法）
         if ANDROID:
-            log_print("🔧 Android环境：跳过字体注册，使用系统默认字体（支持中文）")
-            MainScreen.set_font_name(None)  # 设置为None，不使用自定义字体
+            log_print("🔧 Android环境：尝试加载中文字体...")
+            android_font_loaded = False
+            
+            # 首先尝试加载应用内的字体文件（使用resource_add_path方法）
+            app_font_dirs = [
+                os.path.join(os.getcwd(), 'fonts'),
+                os.path.join(os.path.dirname(__file__) if '__file__' in globals() else '.', 'fonts'),
+                'fonts',
+                './fonts',
+            ]
+            
+            font_filename = 'DroidSansFallback.ttf'
+            
+            for font_dir in app_font_dirs:
+                try:
+                    abs_dir = os.path.abspath(font_dir) if not os.path.isabs(font_dir) else font_dir
+                    font_path = os.path.join(abs_dir, font_filename)
+                    
+                    if os.path.exists(font_path):
+                        log_print(f"   📱 找到字体文件: {font_path}")
+                        # 使用resource_add_path添加字体资源路径
+                        try:
+                            resource_add_path(abs_dir)
+                            log_print(f"   ✅ 字体资源路径已添加: {abs_dir}")
+                        except Exception as e:
+                            log_print(f"   ⚠️ 添加资源路径失败: {e}")
+                        
+                        # 替换默认字体（关键步骤）
+                        try:
+                            LabelBase.register('Roboto', font_filename)
+                            log_print(f"   ✅ 默认字体已替换为: {font_filename}")
+                        except Exception as e:
+                            log_print(f"   ⚠️ 注册字体失败: {e}")
+                            # 尝试使用完整路径
+                            try:
+                                LabelBase.register('Roboto', font_path)
+                                log_print(f"   ✅ 使用完整路径注册字体成功")
+                            except Exception as e2:
+                                log_print(f"   ⚠️ 完整路径注册也失败: {e2}")
+                                continue
+                        
+                        MainScreen.set_font_name('Roboto')
+                        # 设置Kivy默认字体配置
+                        try:
+                            Config.set('kivy', 'default_font', ['Roboto'])
+                        except:
+                            pass
+                        log_print(f"✅ 应用字体加载成功: {font_path}")
+                        android_font_loaded = True
+                        break
+                except Exception as e:
+                    log_print(f"   ⚠️ 字体目录 {font_dir} 处理失败: {e}")
+                    import traceback
+                    log_print(traceback.format_exc())
+                    continue
+            
+            # 如果应用字体失败，尝试系统字体（需要权限，可能失败）
+            if not android_font_loaded:
+                log_print("   ⚠️ 应用内字体加载失败，尝试系统字体...")
+                system_font_paths = [
+                    '/system/fonts/NotoSansCJK-Regular.ttc',
+                    '/system/fonts/DroidSansFallback.ttf',
+                    '/system/fonts/NotoSansCJK-Regular.otf',
+                    '/system/fonts/NotoSansSC-Regular.otf',
+                ]
+                
+                for font_path in system_font_paths:
+                    try:
+                        if os.path.exists(font_path):
+                            log_print(f"   📱 尝试加载系统字体: {font_path}")
+                            # 系统字体直接使用完整路径
+                            LabelBase.register('Roboto', font_path)
+                            MainScreen.set_font_name('Roboto')
+                            try:
+                                Config.set('kivy', 'default_font', ['Roboto'])
+                            except:
+                                pass
+                            log_print(f"✅ Android系统字体加载成功: {font_path}")
+                            android_font_loaded = True
+                            break
+                    except Exception as e:
+                        log_print(f"   ⚠️ 系统字体 {font_path} 加载失败: {e}")
+                        continue
+            
+            if not android_font_loaded:
+                log_print("⚠️ 无法加载中文字体，将使用Kivy默认字体")
+                log_print("   注意：如果显示乱码，请确保fonts/DroidSansFallback.ttf文件存在")
+                MainScreen.set_font_name(None)
         else:
             try:
                 log_print("🔧 注册中文字体...")
@@ -1050,10 +1134,93 @@ if __name__ == '__main__':
             if not font_loaded:
                 log_print("⚠️ PC环境：字体预加载失败，将使用系统默认字体")
     else:
-        # Android环境：不预加载字体，使用系统默认字体
-        # Android系统自带中文字体，可以正常显示中文，无需自定义字体
-        log_print("🔧 Android环境：跳过字体预加载，使用系统默认字体（支持中文）")
-        MainScreen.set_font_name(None)  # 设置为None，不使用自定义字体
+        # Android环境：尝试加载中文字体（使用resource_add_path方法）
+        log_print("🔧 Android环境：尝试加载中文字体...")
+        android_font_loaded = False
+        
+        # 首先尝试应用内字体（使用resource_add_path方法）
+        app_font_dirs = [
+            os.path.join(os.getcwd(), 'fonts'),
+            os.path.join(os.path.dirname(__file__) if '__file__' in globals() else '.', 'fonts'),
+            'fonts',
+            './fonts',
+        ]
+        
+        font_filename = 'DroidSansFallback.ttf'
+        
+        for font_dir in app_font_dirs:
+            try:
+                abs_dir = os.path.abspath(font_dir) if not os.path.isabs(font_dir) else font_dir
+                font_path = os.path.join(abs_dir, font_filename)
+                
+                if os.path.exists(font_path):
+                    log_print(f"   📱 找到字体文件: {font_path}")
+                    # 使用resource_add_path添加字体资源路径
+                    try:
+                        resource_add_path(abs_dir)
+                        log_print(f"   ✅ 字体资源路径已添加: {abs_dir}")
+                    except Exception as e:
+                        log_print(f"   ⚠️ 添加资源路径失败: {e}")
+                    
+                    # 替换默认字体（关键步骤）
+                    try:
+                        LabelBase.register('Roboto', font_filename)
+                        log_print(f"   ✅ 默认字体已替换为: {font_filename}")
+                    except Exception as e:
+                        log_print(f"   ⚠️ 注册字体失败: {e}")
+                        # 尝试使用完整路径
+                        try:
+                            LabelBase.register('Roboto', font_path)
+                            log_print(f"   ✅ 使用完整路径注册字体成功")
+                        except Exception as e2:
+                            log_print(f"   ⚠️ 完整路径注册也失败: {e2}")
+                            continue
+                    
+                    MainScreen.set_font_name('Roboto')
+                    # 设置Kivy默认字体配置
+                    try:
+                        Config.set('kivy', 'default_font', ['Roboto'])
+                    except:
+                        pass
+                    log_print(f"✅ 应用字体预加载成功: {font_path}")
+                    android_font_loaded = True
+                    break
+            except Exception as e:
+                log_print(f"   ⚠️ 字体目录 {font_dir} 处理失败: {e}")
+                continue
+        
+        # 如果应用字体失败，尝试系统字体
+        if not android_font_loaded:
+            log_print("   ⚠️ 应用内字体预加载失败，尝试系统字体...")
+            system_font_paths = [
+                '/system/fonts/NotoSansCJK-Regular.ttc',
+                '/system/fonts/DroidSansFallback.ttf',
+                '/system/fonts/NotoSansCJK-Regular.otf',
+                '/system/fonts/NotoSansSC-Regular.otf',
+            ]
+            
+            for font_path in system_font_paths:
+                try:
+                    if os.path.exists(font_path):
+                        log_print(f"   📱 尝试预加载系统字体: {font_path}")
+                        # 系统字体直接使用完整路径
+                        LabelBase.register('Roboto', font_path)
+                        MainScreen.set_font_name('Roboto')
+                        try:
+                            Config.set('kivy', 'default_font', ['Roboto'])
+                        except:
+                            pass
+                        log_print(f"✅ 系统字体预加载成功: {font_path}")
+                        android_font_loaded = True
+                        break
+                except Exception as e:
+                    log_print(f"   ⚠️ 系统字体 {font_path} 预加载失败: {e}")
+                    continue
+        
+        if not android_font_loaded:
+            log_print("⚠️ 无法加载中文字体，将使用Kivy默认字体")
+            log_print("   注意：如果显示乱码，请确保fonts/DroidSansFallback.ttf文件存在")
+            MainScreen.set_font_name(None)
     
     try:
         print("🔧 准备创建GrabOrderApp实例...")
