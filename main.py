@@ -108,6 +108,12 @@ class MainScreen(BoxLayout):
     
     def _get_font_kwargs(self):
         """获取字体参数"""
+        # 在Android上，完全移除字体参数，使用系统默认字体
+        # Android系统自带中文字体，可以正常显示中文，无需自定义字体
+        if ANDROID:
+            return {}  # 不使用任何字体参数，让系统自动处理
+        
+        # PC环境：尝试使用注册的字体
         if self._font_name:
             return {'font_name': self._font_name}
         return {}
@@ -673,19 +679,25 @@ class GrabOrderApp(App):
             import traceback
             log_print(traceback.format_exc())
         
-        try:
-            log_print("🔧 注册中文字体...")
-            font_name = self.register_fonts()
-            if font_name:
-                MainScreen.set_font_name(font_name)
-                log_print(f"✅ 字体注册完成，字体名称: {font_name}")
-            else:
-                log_print("⚠️ 字体注册失败，将使用系统默认字体")
-        except Exception as e:
-            log_print(f"❌ 字体注册失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-            # 继续执行，不因为字体失败而停止
+        # 在Android上，不注册自定义字体，使用系统默认字体
+        # Android系统自带中文字体，可以正常显示中文
+        if ANDROID:
+            log_print("🔧 Android环境：跳过字体注册，使用系统默认字体（支持中文）")
+            MainScreen.set_font_name(None)  # 设置为None，不使用自定义字体
+        else:
+            try:
+                log_print("🔧 注册中文字体...")
+                font_name = self.register_fonts()
+                if font_name:
+                    MainScreen.set_font_name(font_name)
+                    log_print(f"✅ 字体注册完成，字体名称: {font_name}")
+                else:
+                    log_print("⚠️ 字体注册失败，将使用系统默认字体")
+            except Exception as e:
+                log_print(f"❌ 字体注册失败: {e}")
+                import traceback
+                log_print(traceback.format_exc())
+                # 继续执行，不因为字体失败而停止
         
         # 权限请求移到创建MainScreen之后，使用延迟请求
         # 这样不会阻塞UI的创建
@@ -944,7 +956,8 @@ if __name__ == '__main__':
     log_print(f"Android模式: {ANDROID}")
     log_print("=" * 50)
     
-    # 预加载字体（在应用启动前）
+    # 预加载字体（在应用启动前，仅PC环境）
+    # Android环境：不预加载字体，使用系统默认字体
     if not ANDROID:
         # PC环境：尝试加载Mac系统字体或项目字体
         import platform
@@ -1037,35 +1050,10 @@ if __name__ == '__main__':
             if not font_loaded:
                 log_print("⚠️ PC环境：字体预加载失败，将使用系统默认字体")
     else:
-        try:
-            font_paths = [
-                'fonts/DroidSansFallback.ttf',
-                './fonts/DroidSansFallback.ttf',
-                os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
-            ]
-            font_loaded = False
-            for font_path in font_paths:
-                if os.path.exists(font_path):
-                    try:
-                        LabelBase.register(
-                            name='DroidSansFallback',
-                            fn_regular=font_path
-                        )
-                        LabelBase.register(
-                            name='Roboto',
-                            fn_regular=font_path
-                        )
-                        MainScreen.set_font_name('DroidSansFallback')
-                        log_print(f"✅ 字体预加载成功: {font_path}")
-                        font_loaded = True
-                        break
-                    except Exception as e:
-                        log_print(f"⚠️ 字体注册失败: {e}")
-                        continue
-            if not font_loaded:
-                log_print("⚠️ 未找到字体文件，将使用系统默认字体")
-        except Exception as e:
-            log_print(f"⚠️ 字体预加载失败: {e}")
+        # Android环境：不预加载字体，使用系统默认字体
+        # Android系统自带中文字体，可以正常显示中文，无需自定义字体
+        log_print("🔧 Android环境：跳过字体预加载，使用系统默认字体（支持中文）")
+        MainScreen.set_font_name(None)  # 设置为None，不使用自定义字体
     
     try:
         print("🔧 准备创建GrabOrderApp实例...")
