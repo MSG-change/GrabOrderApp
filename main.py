@@ -140,10 +140,10 @@ class StatusCard(BoxLayout):
 class MainScreen(BoxLayout):
     """主界面 - 美化版"""
     
-    frida_status = StringProperty("未启动")
-    hook_status = StringProperty("未连接")
-    token_status = StringProperty("未获取")
-    grab_status = StringProperty("未启动")
+    frida_status = StringProperty("Not Started")
+    hook_status = StringProperty("Disconnected")
+    token_status = StringProperty("Not Obtained")
+    grab_status = StringProperty("Not Started")
     log_text = StringProperty("")
     
     def __init__(self, **kwargs):
@@ -179,15 +179,15 @@ class MainScreen(BoxLayout):
         # 定时更新
         Clock.schedule_interval(self.update_ui, 0.5)
         
-        self.add_log("🚀 快速抢单助手 - 美化版")
-        self.add_log(f"📱 环境: {'Android' if ANDROID else 'PC'}")
+        self.add_log("Fast Grab Order - Started")
+        self.add_log(f"Environment: {'Android' if ANDROID else 'PC'}")
         
         if not FRIDA_MANAGER_AVAILABLE:
-            self.add_log("⚠️ Frida 管理器不可用")
+            self.add_log("Warning: Frida Manager not available")
         if not AUTO_HOOK_AVAILABLE:
-            self.add_log("⚠️ Hook 服务不可用")
+            self.add_log("Warning: Hook Service not available")
         if not GRAB_SERVICE_AVAILABLE:
-            self.add_log("⚠️ 抢单服务不可用")
+            self.add_log("Warning: Grab Service not available")
     
     def update_bg(self, *args):
         self.bg_rect.pos = self.pos
@@ -225,7 +225,7 @@ class MainScreen(BoxLayout):
         status_container.add_widget(self.token_card)
         
         # 抢单状态卡片
-        self.grab_card = StatusCard('抢单', self.grab_status)
+        self.grab_card = StatusCard('Grab', self.grab_status)
         status_container.add_widget(self.grab_card)
         
         self.add_widget(status_container)
@@ -383,7 +383,7 @@ class MainScreen(BoxLayout):
         """启动所有服务"""
         self.add_log("")
         self.add_log("=" * 50)
-        self.add_log("🚀 开始启动服务...")
+        self.add_log("Starting services...")
         self.add_log("=" * 50)
         
         # 禁用启动按钮，启用停止按钮
@@ -398,31 +398,31 @@ class MainScreen(BoxLayout):
         try:
             # 1. 启动 Frida Server
             self.add_log("")
-            self.add_log("【步骤 1/4】启动 Frida Server")
+            self.add_log("[Step 1/4] Starting Frida Server")
             self.add_log("-" * 50)
             
             if not FRIDA_MANAGER_AVAILABLE:
-                self.add_log("❌ Frida 管理器不可用")
+                self.add_log("ERROR: Frida Manager not available")
                 self._on_start_failed()
                 return
             
             self.frida_manager = FridaManager(log_callback=self.add_log)
             
             if not self.frida_manager.start_frida_server():
-                self.add_log("❌ Frida Server 启动失败")
+                self.add_log("ERROR: Failed to start Frida Server")
                 self._on_start_failed()
                 return
             
-            self.frida_status = "✅ 运行中"
-            self.frida_card.set_value("✅ 运行中", (0.3, 0.9, 0.3, 1))
+            self.frida_status = "Running"
+            self.frida_card.set_value("Running", (0.3, 0.9, 0.3, 1))
             
             # 2. 启动 Hook 服务
             self.add_log("")
-            self.add_log("【步骤 2/4】启动 Hook 服务")
+            self.add_log("[Step 2/4] Starting Hook Service")
             self.add_log("-" * 50)
             
             if not AUTO_HOOK_AVAILABLE:
-                self.add_log("❌ Hook 服务不可用")
+                self.add_log("ERROR: Hook Service not available")
                 self._on_start_failed()
                 return
             
@@ -436,20 +436,20 @@ class MainScreen(BoxLayout):
             self.hook_service.set_token_callback(self.on_token_captured)
             
             if not self.hook_service.start():
-                self.add_log("❌ Hook 服务启动失败")
+                self.add_log("ERROR: Failed to start Hook Service")
                 self._on_start_failed()
                 return
             
-            self.hook_status = "🔄 连接中"
-            self.hook_card.set_value("🔄 连接中", (1, 0.8, 0.3, 1))
+            self.hook_status = "Connecting"
+            self.hook_card.set_value("Connecting", (1, 0.8, 0.3, 1))
             
             # 3. 初始化抢单服务
             self.add_log("")
-            self.add_log("【步骤 3/4】初始化抢单服务")
+            self.add_log("[Step 3/4] Initializing Grab Service")
             self.add_log("-" * 50)
             
             if not GRAB_SERVICE_AVAILABLE:
-                self.add_log("❌ 抢单服务不可用")
+                self.add_log("ERROR: Grab Service not available")
                 self._on_start_failed()
                 return
             
@@ -473,15 +473,15 @@ class MainScreen(BoxLayout):
             
             # 4. 等待 Token
             self.add_log("")
-            self.add_log("【步骤 4/4】等待获取 Token")
+            self.add_log("[Step 4/4] Waiting for Token")
             self.add_log("-" * 50)
-            self.add_log("⏳ 请在目标应用中进行操作")
-            self.add_log("   例如：打开订单列表")
+            self.add_log("Please operate in target app")
+            self.add_log("  e.g. Open order list")
             
             self._on_start_success()
             
         except Exception as e:
-            self.add_log(f"❌ 启动失败: {e}")
+            self.add_log(f"ERROR: Failed to start: {e}")
             import traceback
             self.add_log(traceback.format_exc()[:300])
             self._on_start_failed()
@@ -506,7 +506,7 @@ class MainScreen(BoxLayout):
         
         self.add_log("")
         self.add_log("=" * 50)
-        self.add_log("🎯 Token 已获取！")
+        self.add_log("Token captured!")
         self.add_log("=" * 50)
         self.add_log(f"Token: {token[:30]}...")
         
@@ -520,8 +520,8 @@ class MainScreen(BoxLayout):
         self.token_status = f"✅ {token[:10]}..."
         self.token_card.set_value(f"✅ {token[:10]}...", (0.3, 0.9, 0.3, 1))
         
-        self.hook_status = "✅ 已连接"
-        self.hook_card.set_value("✅ 已连接", (0.3, 0.9, 0.3, 1))
+        self.hook_status = "Connected"
+        self.hook_card.set_value("Connected", (0.3, 0.9, 0.3, 1))
         
         # 更新抢单服务
         if self.grab_service:
@@ -530,40 +530,40 @@ class MainScreen(BoxLayout):
             # 启动抢单
             if not self.grab_service.running:
                 self.add_log("")
-                self.add_log("🚀 自动启动抢单服务...")
+                self.add_log("Auto-starting Grab Service...")
                 self.grab_service.start()
-                self.grab_status = "✅ 运行中"
-                self.grab_card.set_value("✅ 运行中", (0.3, 0.9, 0.3, 1))
+                self.grab_status = "Running"
+                self.grab_card.set_value("Running", (0.3, 0.9, 0.3, 1))
     
     def stop_all_services(self, instance):
         """停止所有服务"""
         self.add_log("")
         self.add_log("=" * 50)
-        self.add_log("⏹️ 停止所有服务...")
+        self.add_log("Stopping all services...")
         self.add_log("=" * 50)
         
         if self.grab_service:
             self.grab_service.stop()
             self.grab_service = None
-            self.grab_status = "已停止"
-            self.grab_card.set_value("已停止", (0.7, 0.7, 0.7, 1))
+            self.grab_status = "Stopped"
+            self.grab_card.set_value("Stopped", (0.7, 0.7, 0.7, 1))
         
         if self.hook_service:
             self.hook_service.stop()
             self.hook_service = None
-            self.hook_status = "未连接"
-            self.hook_card.set_value("未连接", (0.7, 0.7, 0.7, 1))
+            self.hook_status = "Disconnected"
+            self.hook_card.set_value("Disconnected", (0.7, 0.7, 0.7, 1))
         
         if self.frida_manager:
             self.frida_manager = None
         
-        self.token_status = "未获取"
-        self.token_card.set_value("未获取", (0.7, 0.7, 0.7, 1))
+        self.token_status = "Not Obtained"
+        self.token_card.set_value("Not Obtained", (0.7, 0.7, 0.7, 1))
         
         self.start_btn.disabled = False
         self.stop_btn.disabled = True
         
-        self.add_log("✅ 所有服务已停止")
+        self.add_log("All services stopped")
     
     @mainthread
     def add_log(self, message):
@@ -618,14 +618,14 @@ class FastGrabOrderApp(App):
 
 if __name__ == '__main__':
     log_print("=" * 50)
-    log_print("🚀 快速抢单助手 - 美化版")
+    log_print("Fast Grab Order - English Version")
     log_print("=" * 50)
     
     try:
         app = FastGrabOrderApp()
         app.run()
     except Exception as e:
-        log_print(f"❌ 启动失败: {e}")
+        log_print(f"ERROR: Failed to start: {e}")
         import traceback
         log_print(traceback.format_exc())
 
