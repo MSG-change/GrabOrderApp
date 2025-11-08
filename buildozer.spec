@@ -11,7 +11,7 @@ package.domain = com.graborder
 
 # 主程序入口
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,json,onnx,js
+source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf
 
 # 版本号
 version = 1.0.0

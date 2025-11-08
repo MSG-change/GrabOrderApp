@@ -23,6 +23,7 @@ from kivy.uix.switch import Switch
 from kivy.clock import Clock, mainthread
 from kivy.properties import StringProperty, BooleanProperty
 from kivy.core.window import Window
+from kivy.core.text import LabelBase
 
 # Android 权限
 try:
@@ -93,17 +94,27 @@ class MainScreen(BoxLayout):
         status_box.add_widget(self.status_label)
         self.add_widget(status_box)
         
-        # Token 显示
-        token_box = BoxLayout(size_hint_y=0.1, spacing=10)
-        token_box.add_widget(Label(text='Token:', size_hint_x=0.3))
-        self.token_label = Label(
-            text='未获取',
-            size_hint_x=0.7,
-            color=(1, 1, 0, 1),
-            font_size='10sp'
+        # Token 输入
+        token_label = Label(text='Token (手动输入):', size_hint_y=0.05)
+        self.add_widget(token_label)
+        
+        self.token_input = TextInput(
+            text='',
+            multiline=False,
+            size_hint_y=0.1,
+            font_size='12sp',
+            hint_text='粘贴 Authorization Token...'
         )
-        token_box.add_widget(self.token_label)
-        self.add_widget(token_box)
+        self.add_widget(self.token_input)
+        
+        # 保存Token按钮
+        save_token_btn = Button(
+            text='保存Token',
+            size_hint_y=0.08,
+            background_color=(0, 0.5, 0.8, 1),
+            on_press=self.save_token
+        )
+        self.add_widget(save_token_btn)
         
         # 控制按钮
         btn_box = BoxLayout(size_hint_y=0.15, spacing=10)
@@ -126,9 +137,10 @@ class MainScreen(BoxLayout):
         self.add_widget(btn_box)
         
         # VPN 抓包开关
-        vpn_box = BoxLayout(size_hint_y=0.1, spacing=10)
-        vpn_box.add_widget(Label(text='自动获取Token:', size_hint_x=0.6))
-        self.vpn_switch = Switch(active=True, size_hint_x=0.4)
+        vpn_box = BoxLayout(size_hint_y=0.08, spacing=10)
+        vpn_label = Label(text='VPN自动抓包:', size_hint_x=0.6)
+        vpn_box.add_widget(vpn_label)
+        self.vpn_switch = Switch(active=False, size_hint_x=0.4)
         self.vpn_switch.bind(active=self.toggle_vpn)
         vpn_box.add_widget(self.vpn_switch)
         self.add_widget(vpn_box)
@@ -158,15 +170,18 @@ class MainScreen(BoxLayout):
         """启动服务"""
         self.add_log("🚀 正在启动服务...")
         
+        # 检查Token
+        token = self.token_input.text.strip()
+        if not token:
+            self.add_log("❌ 请先输入Token")
+            return
+        
         # 检查配置
         config = self.config_mgr.get_config()
         if not config.get('phone'):
-            self.add_log("❌ 请先在设置中配置手机号")
-            return
-        
-        # 启动 VPN 抓包
-        if self.vpn_switch.active:
-            self.start_vpn()
+            # 使用默认手机号
+            config['phone'] = '18113011654'
+            self.config_mgr.save_config()
         
         # 启动抢单服务
         threading.Thread(target=self._start_grab_service, daemon=True).start()
@@ -248,13 +263,64 @@ class MainScreen(BoxLayout):
             if self.vpn_service:
                 self.vpn_service.stop()
     
+    def save_token(self, instance):
+        """保存Token"""
+        token = self.token_input.text.strip()
+        
+        if not token:
+            self.add_log("❌ Token不能为空")
+            return
+        
+        # 去掉可能的 "Bearer " 前缀
+        if token.startswith('Bearer '):
+            token = token[7:]
+        
+        self.add_log(f"💾 正在保存Token: {token[:20]}...")
+        
+        # 保存到配置
+        self.config_mgr.update_token(token, {})
+        
+        # 更新抢单服务
+        if self.grab_service:
+            self.grab_service.update_token(token, {})
+        
+        self.add_log("✅ Token保存成功")
+    
+    def toggle_vpn(self, instance, value):
+        """切换VPN抓包"""
+        if value:
+            self.add_log("🔒 正在启动VPN抓包...")
+            self.start_vpn()
+        else:
+            self.add_log("⏹️ 正在停止VPN抓包...")
+            if self.vpn_service:
+                self.vpn_service.stop()
+                self.vpn_service = None
+    
+    def start_vpn(self):
+        """启动VPN抓包"""
+        try:
+            self.vpn_service = VPNTokenCapture(
+                token_callback=self.on_token_captured,
+                log_callback=self.add_log
+            )
+            
+            success = self.vpn_service.start_vpn()
+            
+            if not success:
+                self.vpn_switch.active = False
+                
+        except Exception as e:
+            self.add_log(f"❌ VPN启动失败: {e}")
+            self.vpn_switch.active = False
+    
     @mainthread
     def on_token_captured(self, token, headers):
         """Token捕获回调"""
         self.add_log(f"🎯 捕获到新Token: {token[:20]}...")
         
-        # 更新显示
-        self.token_label.text = f"{token[:30]}..."
+        # 更新输入框
+        self.token_input.text = token
         
         # 保存到配置
         self.config_mgr.update_token(token, headers)
@@ -288,11 +354,37 @@ class GrabOrderApp(App):
         """构建应用"""
         Window.clearcolor = (0.1, 0.1, 0.1, 1)
         
+        # 注册中文字体
+        self.register_fonts()
+        
         # 请求权限
         if ANDROID:
             self.request_android_permissions()
         
         return MainScreen()
+    
+    def register_fonts(self):
+        """注册中文字体"""
+        try:
+            # 获取字体路径
+            if ANDROID:
+                # Android：字体在APK的assets目录
+                font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf')
+            else:
+                # PC：相对路径
+                font_path = 'fonts/DroidSansFallback.ttf'
+            
+            if os.path.exists(font_path):
+                # 注册为默认字体
+                LabelBase.register(
+                    name='Roboto',  # Kivy默认字体名称
+                    fn_regular=font_path
+                )
+                print(f"✅ 中文字体加载成功: {font_path}")
+            else:
+                print(f"⚠️ 字体文件不存在: {font_path}")
+        except Exception as e:
+            print(f"❌ 字体加载失败: {e}")
     
     def request_android_permissions(self):
         """请求Android权限"""
