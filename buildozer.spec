@@ -71,8 +71,10 @@ android.manifest.application_meta_data =
 
 # p4a额外参数
 p4a.bootstrap = sdl2
-# 使用develop分支（包含最新的libffi修复）
-p4a.branch = develop  
+# 使用master分支（更稳定）
+p4a.branch = master
+# 使用预构建dist跳过libffi编译
+# p4a.skip_update = True  
 
 
 [buildozer]
