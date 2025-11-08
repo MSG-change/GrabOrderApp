@@ -221,94 +221,165 @@ class MainScreen(BoxLayout):
             log_print(traceback.format_exc())
         
         # 状态显示
-        status_box = BoxLayout(size_hint_y=0.1, spacing=10)
-        status_box.add_widget(Label(text='状态:', size_hint_x=0.3, **font_kwargs))
-        self.status_label = Label(
-            text=self.status_text,
-            size_hint_x=0.7,
-            color=(0, 1, 0, 1),
-            **font_kwargs
-        )
-        status_box.add_widget(self.status_label)
-        self.add_widget(status_box)
+        try:
+            log_print("   创建状态显示...")
+            status_box = BoxLayout(size_hint_y=0.1, spacing=10)
+            log_print("   ✅ status_box创建完成")
+            status_box.add_widget(Label(text='状态:', size_hint_x=0.3, **font_kwargs))
+            log_print("   ✅ 状态Label添加完成")
+            self.status_label = Label(
+                text=self.status_text,
+                size_hint_x=0.7,
+                color=(0, 1, 0, 1),
+                **font_kwargs
+            )
+            log_print("   ✅ status_label创建完成")
+            status_box.add_widget(self.status_label)
+            log_print("   ✅ status_label添加到status_box")
+            self.add_widget(status_box)
+            log_print("   ✅ status_box添加到主界面")
+        except Exception as e:
+            log_print(f"   ❌ 状态显示创建失败: {e}")
+            import traceback
+            log_print(traceback.format_exc())
         
         # Token 输入
-        token_label = Label(text='Token (手动输入):', size_hint_y=0.05, **font_kwargs)
-        self.add_widget(token_label)
-        
-        self.token_input = TextInput(
-            text='',
-            multiline=False,
-            size_hint_y=0.1,
-            font_size='12sp',
-            hint_text='Paste Authorization Token...',  # 英文提示，避免字体问题
-            **font_kwargs
-        )
-        self.add_widget(self.token_input)
+        try:
+            log_print("   创建Token输入...")
+            token_label = Label(text='Token (手动输入):', size_hint_y=0.05, **font_kwargs)
+            log_print("   ✅ token_label创建完成")
+            self.add_widget(token_label)
+            log_print("   ✅ token_label添加完成")
+            
+            log_print("   创建TextInput...")
+            self.token_input = TextInput(
+                text='',
+                multiline=False,
+                size_hint_y=0.1,
+                font_size='12sp',
+                hint_text='Paste Authorization Token...',  # 英文提示，避免字体问题
+                **font_kwargs
+            )
+            log_print("   ✅ token_input创建完成")
+            self.add_widget(self.token_input)
+            log_print("   ✅ token_input添加完成")
+        except Exception as e:
+            log_print(f"   ❌ Token输入创建失败: {e}")
+            import traceback
+            log_print(traceback.format_exc())
         
         # 保存Token按钮
-        save_token_btn = Button(
-            text='保存Token',
-            size_hint_y=0.08,
-            background_color=(0, 0.5, 0.8, 1),
-            on_press=self.save_token,
-            **font_kwargs
-        )
-        self.add_widget(save_token_btn)
+        try:
+            log_print("   创建保存Token按钮...")
+            save_token_btn = Button(
+                text='保存Token',
+                size_hint_y=0.08,
+                background_color=(0, 0.5, 0.8, 1),
+                on_press=self.save_token,
+                **font_kwargs
+            )
+            log_print("   ✅ save_token_btn创建完成")
+            self.add_widget(save_token_btn)
+            log_print("   ✅ save_token_btn添加完成")
+        except Exception as e:
+            log_print(f"   ❌ 保存Token按钮创建失败: {e}")
+            import traceback
+            log_print(traceback.format_exc())
         
         # 控制按钮
-        btn_box = BoxLayout(size_hint_y=0.15, spacing=10)
-        
-        self.start_btn = Button(
-            text='启动抢单',
-            background_color=(0, 0.7, 0, 1),
-            on_press=self.start_service,
-            **font_kwargs
-        )
-        btn_box.add_widget(self.start_btn)
-        
-        self.stop_btn = Button(
-            text='停止',
-            background_color=(0.7, 0, 0, 1),
-            disabled=True,
-            on_press=self.stop_service,
-            **font_kwargs
-        )
-        btn_box.add_widget(self.stop_btn)
-        
-        self.add_widget(btn_box)
+        try:
+            log_print("   创建控制按钮...")
+            btn_box = BoxLayout(size_hint_y=0.15, spacing=10)
+            log_print("   ✅ btn_box创建完成")
+            
+            self.start_btn = Button(
+                text='启动抢单',
+                background_color=(0, 0.7, 0, 1),
+                on_press=self.start_service,
+                **font_kwargs
+            )
+            log_print("   ✅ start_btn创建完成")
+            btn_box.add_widget(self.start_btn)
+            log_print("   ✅ start_btn添加到btn_box")
+            
+            self.stop_btn = Button(
+                text='停止',
+                background_color=(0.7, 0, 0, 1),
+                disabled=True,
+                on_press=self.stop_service,
+                **font_kwargs
+            )
+            log_print("   ✅ stop_btn创建完成")
+            btn_box.add_widget(self.stop_btn)
+            log_print("   ✅ stop_btn添加到btn_box")
+            
+            self.add_widget(btn_box)
+            log_print("   ✅ btn_box添加到主界面")
+        except Exception as e:
+            log_print(f"   ❌ 控制按钮创建失败: {e}")
+            import traceback
+            log_print(traceback.format_exc())
         
         # VPN 抓包开关
-        vpn_box = BoxLayout(size_hint_y=0.08, spacing=10)
-        vpn_label = Label(text='VPN自动抓包:', size_hint_x=0.6, **font_kwargs)
-        vpn_box.add_widget(vpn_label)
-        self.vpn_switch = Switch(active=False, size_hint_x=0.4)
-        self.vpn_switch.bind(active=self.toggle_vpn)
-        vpn_box.add_widget(self.vpn_switch)
-        self.add_widget(vpn_box)
+        try:
+            log_print("   创建VPN开关...")
+            vpn_box = BoxLayout(size_hint_y=0.08, spacing=10)
+            log_print("   ✅ vpn_box创建完成")
+            vpn_label = Label(text='VPN自动抓包:', size_hint_x=0.6, **font_kwargs)
+            log_print("   ✅ vpn_label创建完成")
+            vpn_box.add_widget(vpn_label)
+            log_print("   ✅ vpn_label添加到vpn_box")
+            self.vpn_switch = Switch(active=False, size_hint_x=0.4)
+            log_print("   ✅ vpn_switch创建完成")
+            self.vpn_switch.bind(active=self.toggle_vpn)
+            log_print("   ✅ vpn_switch绑定完成")
+            vpn_box.add_widget(self.vpn_switch)
+            log_print("   ✅ vpn_switch添加到vpn_box")
+            self.add_widget(vpn_box)
+            log_print("   ✅ vpn_box添加到主界面")
+        except Exception as e:
+            log_print(f"   ❌ VPN开关创建失败: {e}")
+            import traceback
+            log_print(traceback.format_exc())
         
         # 日志显示
-        log_label = Label(
-            text='运行日志:',
-            size_hint_y=0.05,
-            halign='left',
-            **font_kwargs
-        )
-        self.add_widget(log_label)
+        try:
+            log_print("   创建日志显示...")
+            log_label = Label(
+                text='运行日志:',
+                size_hint_y=0.05,
+                halign='left',
+                **font_kwargs
+            )
+            log_print("   ✅ log_label创建完成")
+            self.add_widget(log_label)
+            log_print("   ✅ log_label添加完成")
+            
+            log_print("   创建ScrollView...")
+            scroll = ScrollView(size_hint_y=0.5)
+            log_print("   ✅ scroll创建完成")
+            self.log_display = Label(
+                text='',
+                size_hint_y=None,
+                halign='left',
+                valign='top',
+                font_size='12sp',
+                color=(0.8, 0.8, 0.8, 1),
+                **font_kwargs
+            )
+            log_print("   ✅ log_display创建完成")
+            self.log_display.bind(texture_size=self.log_display.setter('size'))
+            log_print("   ✅ log_display绑定完成")
+            scroll.add_widget(self.log_display)
+            log_print("   ✅ log_display添加到scroll")
+            self.add_widget(scroll)
+            log_print("   ✅ scroll添加到主界面")
+        except Exception as e:
+            log_print(f"   ❌ 日志显示创建失败: {e}")
+            import traceback
+            log_print(traceback.format_exc())
         
-        scroll = ScrollView(size_hint_y=0.5)
-        self.log_display = Label(
-            text='',
-            size_hint_y=None,
-            halign='left',
-            valign='top',
-            font_size='12sp',
-            color=(0.8, 0.8, 0.8, 1),
-            **font_kwargs
-        )
-        self.log_display.bind(texture_size=self.log_display.setter('size'))
-        scroll.add_widget(self.log_display)
-        self.add_widget(scroll)
+        log_print("   ✅ build_ui() 所有组件创建完成")
     
     def start_service(self, instance):
         """启动服务"""
