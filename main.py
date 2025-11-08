@@ -1,51 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-抢单助手 - Kivy Android 应用
-功能：VPN抓包 + 自动抢单 + Geetest识别
+快速抢单助手 - 美化版
+现代化设计，卡片式布局，渐变色
 """
 
 import os
 import sys
 import threading
-import logging
 from datetime import datetime
 
-# Android日志输出
+# Android 日志
 try:
     from jnius import autoclass
-    PythonActivity = autoclass('org.kivy.android.PythonActivity')
-    ANDROID_LOG = True
-    
-    def android_log(level, tag, message):
-        """输出日志到Android logcat"""
-        Log = autoclass('android.util.Log')
-        if level == 'd':
-            Log.d(tag, message)
-        elif level == 'i':
-            Log.i(tag, message)
-        elif level == 'w':
-            Log.w(tag, message)
-        elif level == 'e':
-            Log.e(tag, message)
-        else:
-            Log.i(tag, message)
+    ANDROID = True
     
     def log_print(*args, **kwargs):
-        """重定向print到Android日志"""
         message = ' '.join(str(arg) for arg in args)
-        android_log('i', 'GrabOrder', message)
-        # 同时输出到标准输出（如果可用）
+        Log = autoclass('android.util.Log')
+        Log.i('FastGrabOrder', message)
         try:
             print(*args, **kwargs)
         except:
             pass
 except ImportError:
-    ANDROID_LOG = False
+    ANDROID = False
     def log_print(*args, **kwargs):
         print(*args, **kwargs)
 
-# Kivy 核心
+# Kivy
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
@@ -53,591 +36,524 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
-from kivy.uix.switch import Switch
-from kivy.uix.popup import Popup
+from kivy.uix.spinner import Spinner
 from kivy.clock import Clock, mainthread
-from kivy.properties import StringProperty, BooleanProperty
+from kivy.properties import StringProperty, BooleanProperty, NumericProperty
 from kivy.core.window import Window
-from kivy.core.text import LabelBase
-from kivy.config import Config
-from kivy.resources import resource_add_path
-
-# Android 权限
-try:
-    from android.permissions import request_permissions, Permission
-    from android import mActivity
-    ANDROID = True
-except ImportError:
-    ANDROID = False
+from kivy.graphics import Color, RoundedRectangle, Rectangle
+from kivy.uix.widget import Widget
 
 # 导入业务逻辑
 sys.path.insert(0, os.path.dirname(__file__))
 
-# 安全导入，避免启动崩溃
 try:
-    from src.vpn_service import VPNTokenCapture
+    from src.frida_manager import FridaManager
+    FRIDA_MANAGER_AVAILABLE = True
 except Exception as e:
-    log_print(f"⚠️ VPN服务导入失败: {e}")
-    VPNTokenCapture = None
+    log_print(f"⚠️ Frida 管理器导入失败: {e}")
+    FRIDA_MANAGER_AVAILABLE = False
 
 try:
-    from src.grab_service import GrabOrderService
+    from src.auto_hook_service import AutoHookService
+    AUTO_HOOK_AVAILABLE = True
+except Exception as e:
+    log_print(f"⚠️ Auto Hook 服务导入失败: {e}")
+    AUTO_HOOK_AVAILABLE = False
+
+try:
+    from src.fast_grab_service import FastGrabOrderService
+    GRAB_SERVICE_AVAILABLE = True
 except Exception as e:
     log_print(f"⚠️ 抢单服务导入失败: {e}")
-    GrabOrderService = None
+    GRAB_SERVICE_AVAILABLE = False
 
-try:
-    from src.config_manager import ConfigManager
-except Exception as e:
-    log_print(f"⚠️ 配置管理器导入失败: {e}")
-    ConfigManager = None
+
+class RoundedButton(Button):
+    """圆角按钮"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_color = (0, 0, 0, 0)  # 透明背景
+        self.background_normal = ''
+        
+        with self.canvas.before:
+            self.bg_color = Color(0.2, 0.7, 0.3, 1)
+            self.bg_rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[15])
+        
+        self.bind(pos=self.update_rect, size=self.update_rect)
+    
+    def update_rect(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+    
+    def set_color(self, r, g, b, a=1):
+        """设置按钮颜色"""
+        self.bg_color.rgba = (r, g, b, a)
+
+
+class StatusCard(BoxLayout):
+    """状态卡片"""
+    def __init__(self, title, value, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = 'vertical'
+        self.padding = [15, 10]
+        self.spacing = 5
+        
+        # 卡片背景
+        with self.canvas.before:
+            Color(0.15, 0.15, 0.18, 1)
+            self.bg_rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[12])
+        
+        self.bind(pos=self.update_bg, size=self.update_bg)
+        
+        # 标题
+        self.title_label = Label(
+            text=title,
+            font_size='12sp',
+            size_hint_y=0.4,
+            color=(0.7, 0.7, 0.7, 1)
+        )
+        self.add_widget(self.title_label)
+        
+        # 值
+        self.value_label = Label(
+            text=value,
+            font_size='15sp',
+            bold=True,
+            size_hint_y=0.6,
+            color=(1, 1, 1, 1)
+        )
+        self.add_widget(self.value_label)
+    
+    def update_bg(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+    
+    def set_value(self, value, color=None):
+        """设置值和颜色"""
+        self.value_label.text = value
+        if color:
+            self.value_label.color = color
 
 
 class MainScreen(BoxLayout):
-    """主界面"""
+    """主界面 - 美化版"""
     
-    status_text = StringProperty("Not Started")
+    frida_status = StringProperty("未启动")
+    hook_status = StringProperty("未连接")
+    token_status = StringProperty("未获取")
+    grab_status = StringProperty("未启动")
     log_text = StringProperty("")
-    is_running = BooleanProperty(False)
-    
-    # 字体名称（如果字体加载成功）
-    _font_name = None
-    
-    @classmethod
-    def set_font_name(cls, font_name):
-        """设置字体名称"""
-        cls._font_name = font_name
-    
-    def _get_font_kwargs(self):
-        """获取字体参数"""
-        # 在Android上，完全禁用自定义字体，使用系统默认字体（通常支持中文）
-        # Android系统自带中文字体（如Noto Sans CJK），可以正常显示中文
-        if ANDROID:
-            return {}  # 不使用任何字体参数，让系统自动选择字体
-        
-        # PC环境：如果设置了字体名称，使用它
-        if self._font_name:
-            return {'font_name': self._font_name}
-        
-        # 否则不使用任何字体参数，让Kivy使用默认字体
-        return {}
     
     def __init__(self, **kwargs):
-        log_print("=" * 50)
-        log_print("🔧 MainScreen.__init__ 开始")
-        log_print("=" * 50)
+        super().__init__(**kwargs)
         
-        try:
-            super().__init__(**kwargs)
-            log_print("✅ super().__init__ 完成")
-        except Exception as e:
-            log_print(f"❌ super().__init__ 失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-            raise
+        self.orientation = 'vertical'
+        self.padding = 15
+        self.spacing = 12
         
-        try:
-            self.orientation = 'vertical'
-            self.padding = 20
-            self.spacing = 10
-            log_print("✅ 基础属性设置完成")
-        except Exception as e:
-            log_print(f"❌ 基础属性设置失败: {e}")
+        # 背景渐变
+        with self.canvas.before:
+            Color(0.08, 0.08, 0.12, 1)
+            self.bg_rect = Rectangle(size=self.size, pos=self.pos)
         
-        # 先初始化日志缓冲（避免后续调用add_log时出错）
+        self.bind(pos=self.update_bg, size=self.update_bg)
+        
+        # 日志缓冲
         self.log_buffer = []
-        log_print("✅ 日志缓冲初始化完成")
+        self.max_logs = 150
         
-        # 配置管理器（安全初始化）
-        try:
-            if ConfigManager:
-                self.config_mgr = ConfigManager()
-                log_print("✅ 配置管理器初始化成功")
-            else:
-                self.config_mgr = None
-                log_print("⚠️ 配置管理器不可用")
-        except Exception as e:
-            log_print(f"❌ 配置管理器初始化失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-            self.config_mgr = None
-        
-        # VPN Token 捕获服务
-        self.vpn_service = None
-        
-        # 抢单服务
+        # 服务
+        self.frida_manager = None
+        self.hook_service = None
         self.grab_service = None
         
-        log_print("🔧 开始构建UI...")
-        try:
-            # 构建UI
-            self.build_ui()
-            log_print("✅ UI构建完成")
-        except Exception as e:
-            log_print(f"❌ UI构建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-            # 即使UI构建失败，也创建一个最简单的显示
-            self.add_widget(Label(text=f"UI构建失败: {e}", color=(1, 0, 0, 1)))
+        # 配置
+        self.api_base_url = "https://dysh.dyswl.com"
+        self.target_package = "com.dyswl.dysh"
         
-        log_print("🔧 设置定时更新...")
-        try:
-            # 定时更新UI
-            Clock.schedule_interval(self.update_ui, 0.5)
-            log_print("✅ 定时更新设置完成")
-        except Exception as e:
-            log_print(f"❌ 定时更新设置失败: {e}")
+        # 构建 UI
+        self.build_ui()
         
-        # 启动日志（延迟到UI构建后）
-        try:
-            self.add_log("🚀 Grab Order Assistant Started")
-            self.add_log(f"📱 Android Mode: {ANDROID}")
-            if not ConfigManager:
-                self.add_log("⚠️ Config Manager Failed to Load")
-            if not GrabOrderService:
-                self.add_log("⚠️ Grab Service Failed to Load")
-            if not VPNTokenCapture:
-                self.add_log("⚠️ VPN Service Failed to Load")
-            log_print("✅ 启动日志输出完成")
-        except Exception as e:
-            log_print(f"❌ 启动日志输出失败: {e}")
+        # 定时更新
+        Clock.schedule_interval(self.update_ui, 0.5)
         
-        log_print("=" * 50)
-        log_print("✅ MainScreen.__init__ 完成")
-        log_print("=" * 50)
+        self.add_log("🚀 快速抢单助手 - 美化版")
+        self.add_log(f"📱 环境: {'Android' if ANDROID else 'PC'}")
+        
+        if not FRIDA_MANAGER_AVAILABLE:
+            self.add_log("⚠️ Frida 管理器不可用")
+        if not AUTO_HOOK_AVAILABLE:
+            self.add_log("⚠️ Hook 服务不可用")
+        if not GRAB_SERVICE_AVAILABLE:
+            self.add_log("⚠️ 抢单服务不可用")
+    
+    def update_bg(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
     
     def build_ui(self):
-        """构建用户界面"""
-        log_print("🔧 build_ui() 开始")
+        """构建界面"""
+        # 标题栏
+        header = BoxLayout(size_hint_y=0.08, spacing=10)
+        header.add_widget(Widget(size_hint_x=0.1))
+        title = Label(
+            text='⚡ 快速抢单助手',
+            font_size='24sp',
+            bold=True,
+            color=(1, 1, 1, 1),
+            size_hint_x=0.8
+        )
+        header.add_widget(title)
+        header.add_widget(Widget(size_hint_x=0.1))
+        self.add_widget(header)
         
-        # 获取字体参数
-        font_kwargs = self._get_font_kwargs()
-        log_print(f"   字体参数: {font_kwargs}")
+        # 状态卡片区域
+        status_container = BoxLayout(size_hint_y=0.18, spacing=8)
         
-        try:
-            # 标题
-            log_print("   创建标题...")
-            title = Label(
-                text='🚀 Grab Order Assistant',
-                size_hint_y=0.1,
-                font_size='24sp',
-                bold=True,
-                **font_kwargs
-            )
-            self.add_widget(title)
-            log_print("   ✅ 标题添加完成")
-        except Exception as e:
-            log_print(f"   ❌ 标题创建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
+        # Frida 状态卡片
+        self.frida_card = StatusCard('Frida', self.frida_status)
+        status_container.add_widget(self.frida_card)
         
-        # 状态显示
-        try:
-            log_print("   创建状态显示...")
-            status_box = BoxLayout(size_hint_y=0.1, spacing=10)
-            log_print("   ✅ status_box创建完成")
-            status_box.add_widget(Label(text='Status:', size_hint_x=0.3, **font_kwargs))
-            log_print("   ✅ 状态Label添加完成")
-            self.status_label = Label(
-                text=self.status_text,
-                size_hint_x=0.7,
-                color=(0, 1, 0, 1),
-                **font_kwargs
-            )
-            log_print("   ✅ status_label创建完成")
-            status_box.add_widget(self.status_label)
-            log_print("   ✅ status_label添加到status_box")
-            self.add_widget(status_box)
-            log_print("   ✅ status_box添加到主界面")
-        except Exception as e:
-            log_print(f"   ❌ 状态显示创建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
+        # Hook 状态卡片
+        self.hook_card = StatusCard('Hook', self.hook_status)
+        status_container.add_widget(self.hook_card)
         
-        # Token 显示和输入（使用Popup避免阻塞主界面）
-        try:
-            log_print("   创建Token显示...")
-            token_label = Label(text='Current Token:', size_hint_y=0.05, **font_kwargs)
-            log_print("   ✅ token_label创建完成")
-            self.add_widget(token_label)
-            log_print("   ✅ token_label添加完成")
-            
-            # 显示当前Token（从配置读取）
-            log_print("   创建Token显示Label...")
-            current_token = ""
-            if self.config_mgr:
-                try:
-                    config = self.config_mgr.get_config()
-                    current_token = config.get('token', '')
-                    if current_token:
-                        current_token = current_token[:20] + "..." if len(current_token) > 20 else current_token
-                except:
-                    pass
-            
-            self.token_display = Label(
-                text=current_token if current_token else 'Not set (click button below to input)',
-                size_hint_y=0.08,
-                text_size=(None, None),
-                halign='left',
-                valign='middle',
-                color=(0.8, 0.8, 0.8, 1),
-                **font_kwargs
-            )
-            log_print("   ✅ token_display创建完成")
-            self.add_widget(self.token_display)
-            log_print("   ✅ token_display添加完成")
-            
-            # 输入Token按钮（点击后弹出Popup）
-            log_print("   创建输入Token按钮...")
-            input_token_btn = Button(
-                text='Input/Update Token',
-                size_hint_y=0.08,
-                background_color=(0, 0.5, 0.8, 1),
-                on_press=self.show_token_input_popup,
-                **font_kwargs
-            )
-            log_print("   ✅ input_token_btn创建完成")
-            self.add_widget(input_token_btn)
-            log_print("   ✅ input_token_btn添加完成")
-            
-            # 不创建TextInput，避免阻塞主界面
-            self.token_input = None
-            log_print("   ⚠️ 不在主界面创建TextInput，使用Popup方式")
-        except Exception as e:
-            log_print(f"   ❌ Token显示创建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
+        # Token 状态卡片
+        self.token_card = StatusCard('Token', self.token_status)
+        status_container.add_widget(self.token_card)
+        
+        # 抢单状态卡片
+        self.grab_card = StatusCard('抢单', self.grab_status)
+        status_container.add_widget(self.grab_card)
+        
+        self.add_widget(status_container)
+        
+        # 配置面板（卡片式）
+        config_panel = BoxLayout(size_hint_y=0.20, orientation='vertical', spacing=8, padding=[5, 10])
+        
+        # 配置面板背景
+        with config_panel.canvas.before:
+            Color(0.12, 0.12, 0.15, 1)
+            config_bg = RoundedRectangle(size=config_panel.size, pos=config_panel.pos, radius=[15])
+        
+        config_panel.bind(
+            pos=lambda inst, val: setattr(config_bg, 'pos', val),
+            size=lambda inst, val: setattr(config_bg, 'size', val)
+        )
+        
+        # 目标应用
+        app_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        app_label = Label(
+            text='📱 目标应用',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1)
+        )
+        app_box.add_widget(app_label)
+        
+        self.package_input = TextInput(
+            text=self.target_package,
+            multiline=False,
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(0.3, 0.7, 1, 1),
+            padding=[10, 8]
+        )
+        app_box.add_widget(self.package_input)
+        config_panel.add_widget(app_box)
+        
+        # 检查间隔
+        interval_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        interval_label = Label(
+            text='⏱️ 检查间隔',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1)
+        )
+        interval_box.add_widget(interval_label)
+        
+        self.interval_spinner = Spinner(
+            text='1秒',
+            values=('0.5秒', '1秒', '2秒', '3秒'),
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            color=(1, 1, 1, 1)
+        )
+        interval_box.add_widget(self.interval_spinner)
+        config_panel.add_widget(interval_box)
+        
+        # 商品类别
+        category_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        category_label = Label(
+            text='🏷️ 商品类别',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1)
+        )
+        category_box.add_widget(category_label)
+        
+        self.category_input = TextInput(
+            text='2469',
+            multiline=False,
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(0.3, 0.7, 1, 1),
+            padding=[10, 8]
+        )
+        category_box.add_widget(self.category_input)
+        config_panel.add_widget(category_box)
+        
+        self.add_widget(config_panel)
         
         # 控制按钮
-        try:
-            log_print("   创建控制按钮...")
-            btn_box = BoxLayout(size_hint_y=0.15, spacing=10)
-            log_print("   ✅ btn_box创建完成")
-            
-            self.start_btn = Button(
-                text='Start Grab',
-                background_color=(0, 0.7, 0, 1),
-                on_press=self.start_service,
-                **font_kwargs
-            )
-            log_print("   ✅ start_btn创建完成")
-            btn_box.add_widget(self.start_btn)
-            log_print("   ✅ start_btn添加到btn_box")
-            
-            self.stop_btn = Button(
-                text='Stop',
-                background_color=(0.7, 0, 0, 1),
-                disabled=True,
-                on_press=self.stop_service,
-                **font_kwargs
-            )
-            log_print("   ✅ stop_btn创建完成")
-            btn_box.add_widget(self.stop_btn)
-            log_print("   ✅ stop_btn添加到btn_box")
-            
-            self.add_widget(btn_box)
-            log_print("   ✅ btn_box添加到主界面")
-        except Exception as e:
-            log_print(f"   ❌ 控制按钮创建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
+        btn_container = BoxLayout(size_hint_y=0.12, spacing=15, padding=[10, 5])
         
-        # VPN 抓包开关
-        try:
-            log_print("   创建VPN开关...")
-            vpn_box = BoxLayout(size_hint_y=0.08, spacing=10)
-            log_print("   ✅ vpn_box创建完成")
-            vpn_label = Label(text='VPN Auto Capture:', size_hint_x=0.6, **font_kwargs)
-            log_print("   ✅ vpn_label创建完成")
-            vpn_box.add_widget(vpn_label)
-            log_print("   ✅ vpn_label添加到vpn_box")
-            self.vpn_switch = Switch(active=False, size_hint_x=0.4)
-            log_print("   ✅ vpn_switch创建完成")
-            self.vpn_switch.bind(active=self.toggle_vpn)
-            log_print("   ✅ vpn_switch绑定完成")
-            vpn_box.add_widget(self.vpn_switch)
-            log_print("   ✅ vpn_switch添加到vpn_box")
-            self.add_widget(vpn_box)
-            log_print("   ✅ vpn_box添加到主界面")
-        except Exception as e:
-            log_print(f"   ❌ VPN开关创建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
+        # 启动按钮
+        self.start_btn = RoundedButton(text='🚀 启动抢单', font_size='16sp', bold=True)
+        self.start_btn.set_color(0.2, 0.7, 0.3)  # 绿色
+        self.start_btn.bind(on_press=self.start_all_services)
+        btn_container.add_widget(self.start_btn)
         
-        # 日志显示
-        try:
-            log_print("   创建日志显示...")
-            log_label = Label(
-                text='Running Log:',
-                size_hint_y=0.05,
-                halign='left',
-                **font_kwargs
-            )
-            log_print("   ✅ log_label创建完成")
-            self.add_widget(log_label)
-            log_print("   ✅ log_label添加完成")
-            
-            log_print("   创建ScrollView...")
-            scroll = ScrollView(size_hint_y=0.5)
-            log_print("   ✅ scroll创建完成")
-            self.log_display = Label(
-                text='',
-                size_hint_y=None,
-                halign='left',
-                valign='top',
-                font_size='12sp',
-                color=(0.8, 0.8, 0.8, 1),
-                **font_kwargs
-            )
-            log_print("   ✅ log_display创建完成")
-            self.log_display.bind(texture_size=self.log_display.setter('size'))
-            log_print("   ✅ log_display绑定完成")
-            scroll.add_widget(self.log_display)
-            log_print("   ✅ log_display添加到scroll")
-            self.add_widget(scroll)
-            log_print("   ✅ scroll添加到主界面")
-        except Exception as e:
-            log_print(f"   ❌ 日志显示创建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
+        # 停止按钮
+        self.stop_btn = RoundedButton(text='⏹️ 停止', font_size='16sp', bold=True)
+        self.stop_btn.set_color(0.7, 0.2, 0.2)  # 红色
+        self.stop_btn.disabled = True
+        self.stop_btn.bind(on_press=self.stop_all_services)
+        btn_container.add_widget(self.stop_btn)
         
-        log_print("   ✅ build_ui() 所有组件创建完成")
+        self.add_widget(btn_container)
+        
+        # 日志区域（卡片式）
+        log_header = Label(
+            text='📋 运行日志',
+            size_hint_y=0.04,
+            font_size='14sp',
+            bold=True,
+            color=(0.9, 0.9, 0.9, 1),
+            halign='left'
+        )
+        log_header.bind(size=log_header.setter('text_size'))
+        self.add_widget(log_header)
+        
+        # 日志容器
+        log_container = BoxLayout(size_hint_y=0.38, padding=[5, 5])
+        
+        with log_container.canvas.before:
+            Color(0.1, 0.1, 0.13, 1)
+            log_bg = RoundedRectangle(size=log_container.size, pos=log_container.pos, radius=[12])
+        
+        log_container.bind(
+            pos=lambda inst, val: setattr(log_bg, 'pos', val),
+            size=lambda inst, val: setattr(log_bg, 'size', val)
+        )
+        
+        scroll = ScrollView()
+        self.log_display = Label(
+            text='',
+            size_hint_y=None,
+            halign='left',
+            valign='top',
+            font_size='11sp',
+            color=(0.85, 0.85, 0.85, 1),
+            padding=[10, 10]
+        )
+        self.log_display.bind(texture_size=self.log_display.setter('size'))
+        self.log_display.bind(size=self.log_display.setter('text_size'))
+        scroll.add_widget(self.log_display)
+        log_container.add_widget(scroll)
+        
+        self.add_widget(log_container)
     
-    def start_service(self, instance):
-        """启动服务"""
-        self.add_log("🚀 Starting service...")
+    def start_all_services(self, instance):
+        """启动所有服务"""
+        self.add_log("")
+        self.add_log("=" * 50)
+        self.add_log("🚀 开始启动服务...")
+        self.add_log("=" * 50)
         
-        # 检查Token（从配置读取）
-        token = ""
-        if self.config_mgr:
-            try:
-                config = self.config_mgr.get_config()
-                token = config.get('token', '').strip()
-            except:
-                pass
-        
-        if not token:
-            self.add_log("❌ Please input Token first (click 'Input/Update Token' button)")
-            return
-        
-        # 检查配置
-        config = self.config_mgr.get_config()
-        if not config.get('phone'):
-            # 使用默认手机号
-            config['phone'] = '18113011654'
-            self.config_mgr.save_config()
-        
-        # 启动抢单服务
-        threading.Thread(target=self._start_grab_service, daemon=True).start()
-        
-        # 更新UI
-        self.is_running = True
+        # 禁用启动按钮，启用停止按钮
         self.start_btn.disabled = True
         self.stop_btn.disabled = False
-        self.status_text = "Running"
-        self.status_label.color = (0, 1, 0, 1)
+        
+        # 在后台线程启动
+        threading.Thread(target=self._start_services_background, daemon=True).start()
     
-    def _start_grab_service(self):
-        """后台启动抢单服务"""
+    def _start_services_background(self):
+        """后台启动所有服务"""
         try:
-            if not GrabOrderService:
-                self.add_log("❌ Grab service module not loaded")
-                self.stop_service(None)
+            # 1. 启动 Frida Server
+            self.add_log("")
+            self.add_log("【步骤 1/4】启动 Frida Server")
+            self.add_log("-" * 50)
+            
+            if not FRIDA_MANAGER_AVAILABLE:
+                self.add_log("❌ Frida 管理器不可用")
+                self._on_start_failed()
                 return
             
-            if not self.config_mgr:
-                self.add_log("❌ Config manager unavailable")
-                self.stop_service(None)
+            self.frida_manager = FridaManager(log_callback=self.add_log)
+            
+            if not self.frida_manager.start_frida_server():
+                self.add_log("❌ Frida Server 启动失败")
+                self._on_start_failed()
                 return
             
-            config = self.config_mgr.get_config()
+            self.frida_status = "✅ 运行中"
+            self.frida_card.set_value("✅ 运行中", (0.3, 0.9, 0.3, 1))
             
-            self.grab_service = GrabOrderService(
-                phone=config['phone'],
-                api_base_url=config['api_base_url'],
+            # 2. 启动 Hook 服务
+            self.add_log("")
+            self.add_log("【步骤 2/4】启动 Hook 服务")
+            self.add_log("-" * 50)
+            
+            if not AUTO_HOOK_AVAILABLE:
+                self.add_log("❌ Hook 服务不可用")
+                self._on_start_failed()
+                return
+            
+            target_package = self.package_input.text.strip() or self.target_package
+            
+            self.hook_service = AutoHookService(
+                target_package=target_package,
                 log_callback=self.add_log
             )
             
-            self.add_log("✅ Grab service started successfully")
-            self.grab_service.start()
+            self.hook_service.set_token_callback(self.on_token_captured)
+            
+            if not self.hook_service.start():
+                self.add_log("❌ Hook 服务启动失败")
+                self._on_start_failed()
+                return
+            
+            self.hook_status = "🔄 连接中"
+            self.hook_card.set_value("🔄 连接中", (1, 0.8, 0.3, 1))
+            
+            # 3. 初始化抢单服务
+            self.add_log("")
+            self.add_log("【步骤 3/4】初始化抢单服务")
+            self.add_log("-" * 50)
+            
+            if not GRAB_SERVICE_AVAILABLE:
+                self.add_log("❌ 抢单服务不可用")
+                self._on_start_failed()
+                return
+            
+            self.grab_service = FastGrabOrderService(
+                api_base_url=self.api_base_url,
+                log_callback=self.add_log
+            )
+            
+            # 设置参数
+            interval_text = self.interval_spinner.text
+            if '0.5' in interval_text:
+                self.grab_service.check_interval = 0.5
+            elif '1' in interval_text:
+                self.grab_service.check_interval = 1
+            elif '2' in interval_text:
+                self.grab_service.check_interval = 2
+            else:
+                self.grab_service.check_interval = 3
+            
+            self.grab_service.category_id = self.category_input.text.strip() or '2469'
+            
+            # 4. 等待 Token
+            self.add_log("")
+            self.add_log("【步骤 4/4】等待获取 Token")
+            self.add_log("-" * 50)
+            self.add_log("⏳ 请在目标应用中进行操作")
+            self.add_log("   例如：打开订单列表")
+            
+            self._on_start_success()
             
         except Exception as e:
-            self.add_log(f"❌ Start failed: {e}")
+            self.add_log(f"❌ 启动失败: {e}")
             import traceback
-            self.add_log(traceback.format_exc())
-            self.stop_service(None)
+            self.add_log(traceback.format_exc()[:300])
+            self._on_start_failed()
     
-    def stop_service(self, instance):
-        """停止服务"""
-        self.add_log("⏹️ Stopping service...")
+    @mainthread
+    def _on_start_success(self):
+        """启动成功"""
+        pass
+    
+    @mainthread
+    def _on_start_failed(self):
+        """启动失败"""
+        self.start_btn.disabled = False
+        self.stop_btn.disabled = True
+    
+    @mainthread
+    def on_token_captured(self, token_data):
+        """Token 捕获回调"""
+        token = token_data.get('token', '')
+        if not token:
+            return
         
-        # 停止抢单
+        self.add_log("")
+        self.add_log("=" * 50)
+        self.add_log("🎯 Token 已获取！")
+        self.add_log("=" * 50)
+        self.add_log(f"Token: {token[:30]}...")
+        
+        for key in ['club_id', 'role_id', 'tenant_id']:
+            value = token_data.get(key)
+            if value:
+                self.add_log(f"{key}: {value}")
+        
+        self.add_log("=" * 50)
+        
+        self.token_status = f"✅ {token[:10]}..."
+        self.token_card.set_value(f"✅ {token[:10]}...", (0.3, 0.9, 0.3, 1))
+        
+        self.hook_status = "✅ 已连接"
+        self.hook_card.set_value("✅ 已连接", (0.3, 0.9, 0.3, 1))
+        
+        # 更新抢单服务
+        if self.grab_service:
+            self.grab_service.update_token(token_data)
+            
+            # 启动抢单
+            if not self.grab_service.running:
+                self.add_log("")
+                self.add_log("🚀 自动启动抢单服务...")
+                self.grab_service.start()
+                self.grab_status = "✅ 运行中"
+                self.grab_card.set_value("✅ 运行中", (0.3, 0.9, 0.3, 1))
+    
+    def stop_all_services(self, instance):
+        """停止所有服务"""
+        self.add_log("")
+        self.add_log("=" * 50)
+        self.add_log("⏹️ 停止所有服务...")
+        self.add_log("=" * 50)
+        
         if self.grab_service:
             self.grab_service.stop()
             self.grab_service = None
+            self.grab_status = "已停止"
+            self.grab_card.set_value("已停止", (0.7, 0.7, 0.7, 1))
         
-        # 停止 VPN
-        if self.vpn_service:
-            self.vpn_service.stop()
-            self.vpn_service = None
+        if self.hook_service:
+            self.hook_service.stop()
+            self.hook_service = None
+            self.hook_status = "未连接"
+            self.hook_card.set_value("未连接", (0.7, 0.7, 0.7, 1))
         
-        # 更新UI
-        self.is_running = False
+        if self.frida_manager:
+            self.frida_manager = None
+        
+        self.token_status = "未获取"
+        self.token_card.set_value("未获取", (0.7, 0.7, 0.7, 1))
+        
         self.start_btn.disabled = False
         self.stop_btn.disabled = True
-        self.status_text = "Stopped"
-        self.status_label.color = (1, 0, 0, 1)
         
-        self.add_log("✅ Service stopped")
-    
-    def show_token_input_popup(self, instance):
-        """显示Token输入弹窗"""
-        log_print("🔧 显示Token输入弹窗...")
-        
-        # 创建弹窗内容
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        
-        # 标题
-        title_label = Label(text='Please enter Token:', size_hint_y=None, height=40, **self._get_font_kwargs())
-        content.add_widget(title_label)
-        
-        # TextInput（在Popup中创建，不会阻塞主界面）
-        try:
-            log_print("   在Popup中创建TextInput...")
-            token_input = TextInput(
-                text='',
-                multiline=False,
-                size_hint_y=None,
-                height=50,
-                font_size='14sp'
-            )
-            log_print("   ✅ Popup中的TextInput创建成功")
-            content.add_widget(token_input)
-        except Exception as e:
-            log_print(f"   ❌ Popup中TextInput创建失败: {e}")
-            error_label = Label(text=f'TextInput创建失败: {e}', **self._get_font_kwargs())
-            content.add_widget(error_label)
-            token_input = None
-        
-        # 按钮布局
-        btn_layout = BoxLayout(size_hint_y=None, height=50, spacing=10)
-        
-        # 保存按钮
-        def save_token_from_popup(btn):
-            if token_input:
-                token = token_input.text.strip()
-                if token:
-                    # 去掉可能的 "Bearer " 前缀
-                    if token.startswith('Bearer '):
-                        token = token[7:]
-                    self._save_token_internal(token)
-                    popup.dismiss()
-                else:
-                    self.add_log("❌ Token cannot be empty")
-            else:
-                self.add_log("❌ TextInput not created")
-        
-        save_btn = Button(text='Save', on_press=save_token_from_popup, **self._get_font_kwargs())
-        btn_layout.add_widget(save_btn)
-        
-        # 取消按钮
-        cancel_btn = Button(text='Cancel', on_press=lambda btn: popup.dismiss(), **self._get_font_kwargs())
-        btn_layout.add_widget(cancel_btn)
-        
-        content.add_widget(btn_layout)
-        
-        # 创建并显示Popup
-        popup = Popup(
-            title='Input Token',
-            content=content,
-            size_hint=(0.8, 0.4),
-            auto_dismiss=False
-        )
-        popup.open()
-        log_print("   ✅ Token输入弹窗已显示")
-    
-    def _save_token_internal(self, token):
-        """内部保存Token方法"""
-        self.add_log(f"💾 Saving Token: {token[:20]}...")
-        
-        # 保存到配置
-        if self.config_mgr:
-            try:
-                self.config_mgr.update_token(token, {})
-            except Exception as e:
-                self.add_log(f"⚠️ Config save failed: {e}")
-        else:
-            self.add_log("⚠️ Config manager unavailable, Token only saved in memory")
-        
-        # 更新抢单服务
-        if self.grab_service:
-            try:
-                self.grab_service.update_token(token, {})
-            except Exception as e:
-                self.add_log(f"⚠️ Failed to update service token: {e}")
-        
-        # 更新显示
-        if hasattr(self, 'token_display'):
-            display_text = token[:20] + "..." if len(token) > 20 else token
-            self.token_display.text = display_text
-        
-        self.add_log("✅ Token saved successfully")
-    
-    def toggle_vpn(self, instance, value):
-        """切换VPN抓包"""
-        if value:
-            self.add_log("🔒 Starting VPN capture...")
-            self.start_vpn()
-        else:
-            self.add_log("⏹️ Stopping VPN capture...")
-            if self.vpn_service:
-                self.vpn_service.stop()
-                self.vpn_service = None
-    
-    def start_vpn(self):
-        """启动VPN抓包"""
-        try:
-            if not VPNTokenCapture:
-                self.add_log("❌ VPN service module not loaded")
-                self.vpn_switch.active = False
-                return
-            
-            self.vpn_service = VPNTokenCapture(
-                token_callback=self.on_token_captured,
-                log_callback=self.add_log
-            )
-            
-            if ANDROID:
-                success = self.vpn_service.start_vpn()
-                if not success:
-                    self.vpn_switch.active = False
-            else:
-                self.add_log("⚠️ PC mode, VPN capture unavailable")
-                self.vpn_switch.active = False
-                
-        except Exception as e:
-            self.add_log(f"❌ VPN start failed: {e}")
-            import traceback
-            self.add_log(traceback.format_exc())
-            self.vpn_switch.active = False
-    
-    @mainthread
-    def on_token_captured(self, token, headers):
-        """Token捕获回调"""
-        self.add_log(f"🎯 New token captured: {token[:20]}...")
-        
-        # 保存到配置
-        if self.config_mgr:
-            self.config_mgr.update_token(token, headers)
-        
-        # 更新显示
-        if hasattr(self, 'token_display'):
-            display_text = token[:20] + "..." if len(token) > 20 else token
-            self.token_display.text = display_text
-        
-        # 更新抢单服务
-        if self.grab_service:
-            self.grab_service.update_token(token, headers)
+        self.add_log("✅ 所有服务已停止")
     
     @mainthread
     def add_log(self, message):
@@ -646,459 +562,60 @@ class MainScreen(BoxLayout):
         log_line = f"[{timestamp}] {message}"
         
         self.log_buffer.append(log_line)
-        if len(self.log_buffer) > 100:
+        if len(self.log_buffer) > self.max_logs:
             self.log_buffer.pop(0)
         
         self.log_text = '\n'.join(self.log_buffer)
     
     def update_ui(self, dt):
-        """定时更新UI"""
-        self.status_label.text = self.status_text
+        """更新 UI"""
         self.log_display.text = self.log_text
 
 
-class GrabOrderApp(App):
+class FastGrabOrderApp(App):
     """主应用"""
     
     def build(self):
-        """构建应用"""
-        # 立即输出，确保即使后续出错也能看到
-        try:
-            print("=" * 50)
-            print("🚀 GrabOrderApp.build() 开始")
-            print("=" * 50)
-        except:
-            pass
+        # 深色主题背景
+        Window.clearcolor = (0.08, 0.08, 0.12, 1)
         
-        log_print("=" * 50)
-        log_print("🚀 GrabOrderApp.build() 开始 (log_print)")
-        log_print("=" * 50)
-        
-        try:
-            log_print("🔧 设置窗口颜色...")
-            Window.clearcolor = (0.1, 0.1, 0.1, 1)
-            log_print("✅ 窗口颜色设置完成")
-        except Exception as e:
-            log_print(f"❌ 窗口颜色设置失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-        
-        # 在Android上，完全禁用自定义字体，使用系统默认字体
-        # Android系统自带中文字体（如Noto Sans CJK），可以正常显示中文
-        # 自定义字体在Android上会导致SDL2加载失败，导致应用崩溃
+        # Android 权限
         if ANDROID:
-            log_print("🔧 Android环境：使用系统默认字体（支持中文）")
-            log_print("   注意：Android系统自带中文字体，无需加载自定义字体")
-            MainScreen.set_font_name(None)  # 设置为None，确保不使用自定义字体
-        else:
-            try:
-                log_print("🔧 注册中文字体...")
-                font_name = self.register_fonts()
-                if font_name:
-                    MainScreen.set_font_name(font_name)
-                    log_print(f"✅ 字体注册完成，字体名称: {font_name}")
-                else:
-                    log_print("⚠️ 字体注册失败，将使用系统默认字体")
-            except Exception as e:
-                log_print(f"❌ 字体注册失败: {e}")
-                import traceback
-                log_print(traceback.format_exc())
-                # 继续执行，不因为字体失败而停止
+            Clock.schedule_once(self.request_permissions, 0.5)
         
-        # 权限请求移到创建MainScreen之后，使用延迟请求
-        # 这样不会阻塞UI的创建
-        if ANDROID:
-            log_print("🔧 Android环境，将在UI创建后请求权限")
-        else:
-            log_print("💻 PC环境，跳过权限请求")
-        
-        try:
-            log_print("🔧 创建MainScreen...")
-            screen = MainScreen()
-            log_print("✅ MainScreen创建完成")
-            
-            # 在UI创建后延迟请求权限（避免阻塞UI显示）
-            if ANDROID:
-                def request_permissions_delayed(dt):
-                    try:
-                        log_print("🔧 延迟请求Android权限...")
-                        self.request_android_permissions()
-                        log_print("✅ 权限请求完成")
-                    except Exception as e:
-                        log_print(f"❌ 权限请求失败: {e}")
-                
-                Clock.schedule_once(request_permissions_delayed, 0.5)
-            
-            log_print("=" * 50)
-            log_print("🎉 GrabOrderApp.build() 完成")
-            log_print("=" * 50)
-            return screen
-        except Exception as e:
-            log_print("=" * 50)
-            log_print("❌ MainScreen创建失败!")
-            log_print("=" * 50)
-            log_print(f"错误: {e}")
-            import traceback
-            error_trace = traceback.format_exc()
-            log_print(error_trace)
-            log_print("=" * 50)
-            # 返回一个最简单的Label显示错误
-            try:
-                error_label = Label(
-                    text=f"Startup Failed\n\nError: {str(e)}\n\nPlease check logcat for details",
-                    color=(1, 0, 0, 1),
-                    halign='center',
-                    valign='middle',
-                    text_size=(Window.width - 40, None) if hasattr(Window, 'width') else (None, None),
-                    font_size='18sp'
-                )
-                log_print("✅ 错误Label创建成功")
-                return error_label
-            except Exception as e2:
-                log_print(f"❌ 连错误Label都创建失败: {e2}")
-                # 最后的备用方案：返回None，让Kivy使用默认界面
-                return None
+        return MainScreen()
     
-    def register_fonts(self):
-        """注册中文字体"""
+    def request_permissions(self, dt):
+        """请求权限"""
         try:
-            log_print("🔤 开始注册中文字体...")
-            log_print(f"   当前目录: {os.getcwd()}")
-            log_print(f"   __file__: {os.path.abspath(__file__) if '__file__' in globals() else 'N/A'}")
-            
-            # 获取字体路径
-            if ANDROID:
-                # Android：尝试多个可能的路径
-                log_print("   📱 Android环境：开始加载字体")
-                base_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else '.'
-                font_paths = [
-                    os.path.join(os.getcwd(), 'fonts', 'DroidSansFallback.ttf'),
-                    os.path.join(base_dir, 'fonts', 'DroidSansFallback.ttf'),
-                    '/data/data/com.graborder.graborder/files/app/fonts/DroidSansFallback.ttf',
-                    '/data/data/com.graborder.graborder/files/fonts/DroidSansFallback.ttf',
-                    'fonts/DroidSansFallback.ttf',
-                    './fonts/DroidSansFallback.ttf',
-                    # Kivy Android assets路径
-                    os.path.join(os.path.dirname(__file__) if '__file__' in globals() else '.', 'fonts', 'DroidSansFallback.ttf'),
-                ]
-                
-                font_loaded = False
-                for font_path in font_paths:
-                    try:
-                        abs_path = os.path.abspath(font_path) if not os.path.isabs(font_path) else font_path
-                        log_print(f"   📱 尝试路径: {font_path}")
-                        log_print(f"      绝对路径: {abs_path}")
-                        if os.path.exists(font_path) or os.path.exists(abs_path):
-                            actual_path = font_path if os.path.exists(font_path) else abs_path
-                            log_print(f"   ✅ 文件存在: {actual_path}")
-                            # 注册为自定义字体名称
-                            LabelBase.register(
-                                name='DroidSansFallback',
-                                fn_regular=actual_path
-                            )
-                            # 也注册为默认字体（覆盖Roboto）
-                            LabelBase.register(
-                                name='Roboto',
-                                fn_regular=actual_path
-                            )
-                            log_print(f"✅ Android字体加载成功: {actual_path}")
-                            font_loaded = True
-                            return 'DroidSansFallback'
-                        else:
-                            log_print(f"   ❌ 文件不存在")
-                    except Exception as e:
-                        log_print(f"   ⚠️ 路径 {font_path} 检查失败: {e}")
-                        import traceback
-                        log_print(traceback.format_exc())
-                        continue
-                
-                if not font_loaded:
-                    log_print("⚠️ Android：未找到字体文件，将使用系统默认字体（可能显示方块）")
-                    log_print("   请确保字体文件存在于以下位置之一:")
-                    for path in font_paths:
-                        log_print(f"     - {path}")
-                    return None
-            else:
-                # PC：尝试使用系统自带的中文字体
-                import platform
-                system = platform.system()
-                
-                if system == 'Darwin':  # macOS
-                    # Mac系统自带中文字体路径
-                    mac_font_paths = [
-                        '/System/Library/Fonts/PingFang.ttc',
-                        '/System/Library/Fonts/STHeiti Light.ttc',
-                        '/System/Library/Fonts/STHeiti Medium.ttc',
-                        '/Library/Fonts/Arial Unicode.ttf',
-                    ]
-                    
-                    for font_path in mac_font_paths:
-                        if os.path.exists(font_path):
-                            try:
-                                log_print(f"   💻 尝试使用Mac系统字体: {font_path}")
-                                LabelBase.register(
-                                    name='DroidSansFallback',
-                                    fn_regular=font_path
-                                )
-                                LabelBase.register(
-                                    name='Roboto',
-                                    fn_regular=font_path
-                                )
-                                log_print(f"✅ Mac系统字体加载成功: {font_path}")
-                                return 'DroidSansFallback'
-                            except Exception as e:
-                                log_print(f"   ⚠️ 系统字体加载失败: {e}")
-                                continue
-                    
-                    # 如果系统字体都失败，尝试项目字体
-                    log_print("   💻 系统字体加载失败，尝试项目字体...")
-                    font_paths = [
-                        'fonts/DroidSansFallback.ttf',
-                        './fonts/DroidSansFallback.ttf',
-                        os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
-                    ]
-                    for font_path in font_paths:
-                        if os.path.exists(font_path):
-                            try:
-                                abs_path = os.path.abspath(font_path)
-                                log_print(f"   尝试路径: {font_path} (绝对路径: {abs_path})")
-                                LabelBase.register(
-                                    name='DroidSansFallback',
-                                    fn_regular=abs_path
-                                )
-                                LabelBase.register(
-                                    name='Roboto',
-                                    fn_regular=abs_path
-                                )
-                                log_print(f"✅ 项目字体加载成功: {font_path}")
-                                return 'DroidSansFallback'
-                            except Exception as e:
-                                log_print(f"   ⚠️ 项目字体加载失败: {e}")
-                                continue
-                    
-                    log_print("   ⚠️ 所有字体加载失败，使用系统默认字体")
-                    return None
-                else:
-                    # Linux/Windows：尝试加载项目字体
-                    font_paths = [
-                        'fonts/DroidSansFallback.ttf',
-                        './fonts/DroidSansFallback.ttf',
-                        os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
-                    ]
-                    for font_path in font_paths:
-                        if os.path.exists(font_path):
-                            try:
-                                abs_path = os.path.abspath(font_path)
-                                LabelBase.register(
-                                    name='DroidSansFallback',
-                                    fn_regular=abs_path
-                                )
-                                log_print(f"✅ 字体加载成功: {font_path}")
-                                return 'DroidSansFallback'
-                            except Exception as e:
-                                log_print(f"   ⚠️ 字体加载失败: {e}")
-                                continue
-                    log_print("   ⚠️ 字体加载失败，使用系统默认字体")
-                    return None
-                
-        except Exception as e:
-            log_print(f"❌ 字体加载过程出错: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-            log_print("⚠️ 继续使用系统默认字体")
-            return None
-    
-    def request_android_permissions(self):
-        """请求Android权限"""
-        try:
-            # 只请求基本的必要权限
+            from android.permissions import request_permissions, Permission
             permissions = [
                 Permission.INTERNET,
                 Permission.ACCESS_NETWORK_STATE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+                Permission.READ_EXTERNAL_STORAGE,
             ]
-            
-            # 尝试请求可选权限（如果存在）
-            try:
-                permissions.append(Permission.WRITE_EXTERNAL_STORAGE)
-                permissions.append(Permission.READ_EXTERNAL_STORAGE)
-            except:
-                log_print("⚠️ 存储权限不可用（可能Android版本较新）")
-            
-            log_print(f"🔧 请求权限: {permissions}")
             request_permissions(permissions)
-            log_print("✅ 权限请求已发送")
         except Exception as e:
-            log_print(f"❌ 权限请求出错: {e}")
-            import traceback
-            log_print(traceback.format_exc())
+            log_print(f"权限请求失败: {e}")
     
     def on_pause(self):
-        """应用暂停（保持后台运行）"""
         return True
     
     def on_resume(self):
-        """应用恢复"""
         pass
 
 
 if __name__ == '__main__':
-    # 立即输出启动信息（使用print确保在log_print初始化之前也能看到）
-    try:
-        print("=" * 50)
-        print("🚀 抢单助手启动")
-        print("=" * 50)
-        print(f"Python版本: {sys.version}")
-        print(f"工作目录: {os.getcwd()}")
-        print(f"Android模式: {ANDROID}")
-        print("=" * 50)
-    except:
-        pass
-    
     log_print("=" * 50)
-    log_print("🚀 抢单助手启动 (log_print)")
+    log_print("🚀 快速抢单助手 - 美化版")
     log_print("=" * 50)
-    log_print(f"Python版本: {sys.version}")
-    log_print(f"工作目录: {os.getcwd()}")
-    log_print(f"Android模式: {ANDROID}")
-    log_print("=" * 50)
-    
-    # 预加载字体（在应用启动前，仅PC环境）
-    # Android环境：不预加载字体，使用系统默认字体
-    if not ANDROID:
-        # PC环境：尝试加载Mac系统字体或项目字体
-        import platform
-        system = platform.system()
-        
-        if system == 'Darwin':  # macOS
-            font_loaded = False
-            # 首先尝试Mac系统字体
-            mac_font_paths = [
-                '/System/Library/Fonts/PingFang.ttc',
-                '/System/Library/Fonts/STHeiti Light.ttc',
-                '/System/Library/Fonts/STHeiti Medium.ttc',
-                '/Library/Fonts/Arial Unicode.ttf',
-            ]
-            
-            for font_path in mac_font_paths:
-                if os.path.exists(font_path):
-                    try:
-                        LabelBase.register(
-                            name='DroidSansFallback',
-                            fn_regular=font_path
-                        )
-                        LabelBase.register(
-                            name='Roboto',
-                            fn_regular=font_path
-                        )
-                        MainScreen.set_font_name('DroidSansFallback')
-                        log_print(f"✅ Mac系统字体预加载成功: {font_path}")
-                        font_loaded = True
-                        break
-                    except Exception as e:
-                        log_print(f"⚠️ Mac系统字体预加载失败: {e}")
-                        continue
-            
-            # 如果系统字体失败，尝试项目字体
-            if not font_loaded:
-                font_paths = [
-                    'fonts/DroidSansFallback.ttf',
-                    './fonts/DroidSansFallback.ttf',
-                    os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
-                ]
-                for font_path in font_paths:
-                    if os.path.exists(font_path):
-                        try:
-                            abs_path = os.path.abspath(font_path)
-                            LabelBase.register(
-                                name='DroidSansFallback',
-                                fn_regular=abs_path
-                            )
-                            LabelBase.register(
-                                name='Roboto',
-                                fn_regular=abs_path
-                            )
-                            MainScreen.set_font_name('DroidSansFallback')
-                            log_print(f"✅ 项目字体预加载成功: {font_path}")
-                            font_loaded = True
-                            break
-                        except Exception as e:
-                            log_print(f"⚠️ 项目字体预加载失败: {e}")
-                            continue
-            
-            if not font_loaded:
-                log_print("⚠️ PC环境：所有字体预加载失败，将使用系统默认字体（中文可能显示为方块）")
-        else:
-            # Linux/Windows：尝试加载项目字体
-            font_paths = [
-                'fonts/DroidSansFallback.ttf',
-                './fonts/DroidSansFallback.ttf',
-                os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
-            ]
-            font_loaded = False
-            for font_path in font_paths:
-                if os.path.exists(font_path):
-                    try:
-                        LabelBase.register(
-                            name='DroidSansFallback',
-                            fn_regular=font_path
-                        )
-                        LabelBase.register(
-                            name='Roboto',
-                            fn_regular=font_path
-                        )
-                        MainScreen.set_font_name('DroidSansFallback')
-                        log_print(f"✅ 字体预加载成功: {font_path}")
-                        font_loaded = True
-                        break
-                    except Exception as e:
-                        log_print(f"⚠️ 字体预加载失败: {e}")
-                        continue
-            if not font_loaded:
-                log_print("⚠️ PC环境：字体预加载失败，将使用系统默认字体")
-    else:
-        # Android环境：完全禁用自定义字体，使用系统默认字体
-        # Android系统自带中文字体（如Noto Sans CJK），可以正常显示中文
-        # 自定义字体在Android上会导致SDL2加载失败，导致应用崩溃
-        log_print("🔧 Android环境：使用系统默认字体（支持中文）")
-        log_print("   注意：Android系统自带中文字体，无需加载自定义字体")
-        MainScreen.set_font_name(None)  # 设置为None，确保不使用自定义字体
     
     try:
-        print("🔧 准备创建GrabOrderApp实例...")
-        log_print("🔧 准备创建GrabOrderApp实例...")
-        app = GrabOrderApp()
-        print("✅ GrabOrderApp实例创建成功")
-        log_print("✅ GrabOrderApp实例创建成功")
-        print("🔧 开始运行应用...")
-        log_print("🔧 开始运行应用...")
+        app = FastGrabOrderApp()
         app.run()
     except Exception as e:
-        print("=" * 50)
-        print("❌ 应用启动失败！")
-        print(f"错误: {e}")
-        import traceback
-        print(traceback.format_exc())
-        print("=" * 50)
-        
-        log_print("=" * 50)
-        log_print("❌ 应用启动失败！")
-        log_print("=" * 50)
-        log_print(f"错误: {e}")
+        log_print(f"❌ 启动失败: {e}")
         import traceback
         log_print(traceback.format_exc())
-        log_print("=" * 50)
-        # 尝试显示错误信息（如果Kivy可用）
-        try:
-            from kivy.app import App
-            from kivy.uix.label import Label
-            
-            class ErrorApp(App):
-                def build(self):
-                    return Label(
-                        text=f"启动失败:\n{e}\n\n请查看日志",
-                        color=(1, 0, 0, 1)
-                    )
-            ErrorApp().run()
-        except:
-            pass
 

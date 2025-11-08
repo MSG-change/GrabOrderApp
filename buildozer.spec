@@ -16,7 +16,7 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*
 
 # 版本号
-version = 1.0.1
+version = 1.0.2
 
 # 应用需求（Python 包）
 # 完全移除numpy依赖（使用纯Python + PIL + Java ONNX Runtime）
