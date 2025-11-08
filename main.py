@@ -252,13 +252,15 @@ class MainScreen(BoxLayout):
             log_print("   ✅ token_label添加完成")
             
             log_print("   创建TextInput...")
+            # 在Android上，TextInput使用自定义字体可能导致卡住，完全移除字体参数
+            log_print("   ⚠️ TextInput不使用自定义字体，使用系统默认字体")
             self.token_input = TextInput(
                 text='',
                 multiline=False,
                 size_hint_y=0.1,
                 font_size='12sp',
                 hint_text='Paste Authorization Token...',  # 英文提示，避免字体问题
-                **font_kwargs
+                # 不使用font_kwargs，避免卡住
             )
             log_print("   ✅ token_input创建完成")
             self.add_widget(self.token_input)
