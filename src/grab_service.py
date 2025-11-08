@@ -12,21 +12,33 @@ import requests
 import threading
 from datetime import datetime
 
-# 导入现有模块（暂时禁用Geetest）
-# parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# sys.path.insert(0, os.path.join(parent_dir, '..'))
+# 导入Geetest模块（从libs目录）
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+libs_dir = os.path.join(parent_dir, 'libs')
+sys.path.insert(0, libs_dir)
 
-# try:
-#     from geetest_helper_local import GeetestHelperLocal
-#     from local_w_generator import LocalWGenerator
-# except ImportError:
-#     # 如果导入失败，使用内置版本
-#     GeetestHelperLocal = None
-#     LocalWGenerator = None
+# 尝试导入Geetest相关模块
+try:
+    from geetest_helper_local import GeetestHelperLocal
+    print("✅ GeetestHelperLocal 导入成功")
+except ImportError as e:
+    print(f"⚠️ GeetestHelperLocal 导入失败: {e}")
+    GeetestHelperLocal = None
 
-# 暂时禁用Geetest（简化启动）
-GeetestHelperLocal = None
-LocalWGenerator = None
+try:
+    # 根据环境选择W生成器
+    try:
+        from jnius import autoclass
+        # Android环境：使用远程API
+        from android_w_generator import AndroidWGenerator as LocalWGenerator
+        print("✅ AndroidWGenerator 导入成功")
+    except ImportError:
+        # PC环境：使用本地JS
+        from local_w_generator import LocalWGenerator
+        print("✅ LocalWGenerator 导入成功")
+except ImportError as e:
+    print(f"⚠️ W生成器导入失败: {e}")
+    LocalWGenerator = None
 
 
 class GrabOrderService:
@@ -53,33 +65,55 @@ class GrabOrderService:
             'Host': 'dysh.dyswl.com',
         }
         
-        # Geetest 识别器（暂时禁用）
+        # Geetest 识别器（安全加载）
         self.geetest_helper = None
         self.w_generator = None
-        self.log("⚠️ Geetest识别器暂时禁用（简化版本）")
         
-        # try:
-        #     if GeetestHelperLocal and LocalWGenerator:
-        #         # 确定模型路径（Android vs PC）
-        #         if os.path.exists('/data/data'):  # Android环境
-        #             # Android：模型在APK的assets目录中
-        #             model_path = os.path.join(parent_dir, 'assets', 'best_siamese_model.onnx')
-        #         else:  # PC环境
-        #             model_path = "best_siamese_model.onnx"
-        #         
-        #         self.geetest_helper = GeetestHelperLocal(
-        #             model_path=model_path,
-        #             captcha_id="045e2c229998a88721e32a763bc0f7b8"
-        #         )
-        #         # W参数生成器（Android自动使用远程API，PC使用本地JS）
-        #         self.w_generator = LocalWGenerator()
-        #         self.log("✅ Geetest识别器加载成功")
-        #     else:
-        #         self.log("⚠️ Geetest模块未加载")
-        # except Exception as e:
-        #     self.log(f"⚠️ Geetest识别器加载失败: {e}")
-        #     self.geetest_helper = None
-        #     self.w_generator = None
+        try:
+            if GeetestHelperLocal and LocalWGenerator:
+                self.log("🔧 正在初始化Geetest识别器...")
+                
+                # 确定模型路径（Android vs PC）
+                if os.path.exists('/data/data'):  # Android环境
+                    # Android：尝试多个可能的路径
+                    possible_paths = [
+                        os.path.join(parent_dir, 'assets', 'best_siamese_model.onnx'),
+                        'assets/best_siamese_model.onnx',
+                        'best_siamese_model.onnx',
+                    ]
+                    model_path = None
+                    for path in possible_paths:
+                        if os.path.exists(path):
+                            model_path = path
+                            self.log(f"   找到模型: {path}")
+                            break
+                    
+                    if not model_path:
+                        # 使用第一个路径，让GeetestHelper自己处理
+                        model_path = possible_paths[0]
+                        self.log(f"   使用默认路径: {model_path}")
+                else:  # PC环境
+                    model_path = "best_siamese_model.onnx"
+                
+                # 初始化Geetest Helper
+                self.geetest_helper = GeetestHelperLocal(
+                    model_path=model_path,
+                    captcha_id="045e2c229998a88721e32a763bc0f7b8"
+                )
+                
+                # 初始化W参数生成器
+                self.w_generator = LocalWGenerator()
+                
+                self.log("✅ Geetest识别器加载成功")
+            else:
+                self.log("⚠️ Geetest模块未加载，验证码识别将被禁用")
+                
+        except Exception as e:
+            self.log(f"⚠️ Geetest识别器加载失败: {e}")
+            import traceback
+            self.log(traceback.format_exc()[:200])  # 只显示前200字符
+            self.geetest_helper = None
+            self.w_generator = None
         
         # 运行控制
         self.running = False
