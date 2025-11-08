@@ -133,8 +133,9 @@ class StatusCard(BoxLayout):
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
     
+    @mainthread
     def set_value(self, value, color=None):
-        """设置值和颜色"""
+        """设置值和颜色（线程安全）"""
         self.value_label.text = value
         if color:
             self.value_label.color = color
@@ -511,7 +512,7 @@ class MainScreen(BoxLayout):
     
     @mainthread
     def _on_start_failed(self):
-        """启动失败"""
+        """启动失败（线程安全）"""
         self.start_btn.disabled = False
         self.stop_btn.disabled = True
     
@@ -585,7 +586,7 @@ class MainScreen(BoxLayout):
     
     @mainthread
     def add_log(self, message):
-        """添加日志"""
+        """添加日志（线程安全）"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_line = f"[{timestamp}] {message}"
         
