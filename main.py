@@ -606,8 +606,9 @@ class MainScreen(BoxLayout):
         
         self.log_text = '\n'.join(self.log_buffer)
     
+    @mainthread
     def update_ui(self, dt):
-        """更新 UI"""
+        """更新 UI（线程安全）"""
         self.log_display.text = self.log_text
 
 
