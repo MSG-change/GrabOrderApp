@@ -54,6 +54,7 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.uix.switch import Switch
+from kivy.uix.popup import Popup
 from kivy.clock import Clock, mainthread
 from kivy.properties import StringProperty, BooleanProperty
 from kivy.core.window import Window
@@ -243,48 +244,57 @@ class MainScreen(BoxLayout):
             import traceback
             log_print(traceback.format_exc())
         
-        # Token 输入
+        # Token 显示和输入（使用Popup避免阻塞主界面）
         try:
-            log_print("   创建Token输入...")
-            token_label = Label(text='Token (手动输入):', size_hint_y=0.05, **font_kwargs)
+            log_print("   创建Token显示...")
+            token_label = Label(text='当前Token:', size_hint_y=0.05, **font_kwargs)
             log_print("   ✅ token_label创建完成")
             self.add_widget(token_label)
             log_print("   ✅ token_label添加完成")
             
-            log_print("   创建TextInput...")
-            # 在Android上，TextInput使用自定义字体可能导致卡住，完全移除字体参数
-            log_print("   ⚠️ TextInput不使用自定义字体，使用系统默认字体")
-            self.token_input = TextInput(
-                text='',
-                multiline=False,
-                size_hint_y=0.1,
-                font_size='12sp',
-                hint_text='Paste Authorization Token...',  # 英文提示，避免字体问题
-                # 不使用font_kwargs，避免卡住
-            )
-            log_print("   ✅ token_input创建完成")
-            self.add_widget(self.token_input)
-            log_print("   ✅ token_input添加完成")
-        except Exception as e:
-            log_print(f"   ❌ Token输入创建失败: {e}")
-            import traceback
-            log_print(traceback.format_exc())
-        
-        # 保存Token按钮
-        try:
-            log_print("   创建保存Token按钮...")
-            save_token_btn = Button(
-                text='保存Token',
+            # 显示当前Token（从配置读取）
+            log_print("   创建Token显示Label...")
+            current_token = ""
+            if self.config_mgr:
+                try:
+                    config = self.config_mgr.get_config()
+                    current_token = config.get('token', '')
+                    if current_token:
+                        current_token = current_token[:20] + "..." if len(current_token) > 20 else current_token
+                except:
+                    pass
+            
+            self.token_display = Label(
+                text=current_token if current_token else '未设置（点击下方按钮输入）',
                 size_hint_y=0.08,
-                background_color=(0, 0.5, 0.8, 1),
-                on_press=self.save_token,
+                text_size=(None, None),
+                halign='left',
+                valign='middle',
+                color=(0.8, 0.8, 0.8, 1),
                 **font_kwargs
             )
-            log_print("   ✅ save_token_btn创建完成")
-            self.add_widget(save_token_btn)
-            log_print("   ✅ save_token_btn添加完成")
+            log_print("   ✅ token_display创建完成")
+            self.add_widget(self.token_display)
+            log_print("   ✅ token_display添加完成")
+            
+            # 输入Token按钮（点击后弹出Popup）
+            log_print("   创建输入Token按钮...")
+            input_token_btn = Button(
+                text='输入/更新Token',
+                size_hint_y=0.08,
+                background_color=(0, 0.5, 0.8, 1),
+                on_press=self.show_token_input_popup,
+                **font_kwargs
+            )
+            log_print("   ✅ input_token_btn创建完成")
+            self.add_widget(input_token_btn)
+            log_print("   ✅ input_token_btn添加完成")
+            
+            # 不创建TextInput，避免阻塞主界面
+            self.token_input = None
+            log_print("   ⚠️ 不在主界面创建TextInput，使用Popup方式")
         except Exception as e:
-            log_print(f"   ❌ 保存Token按钮创建失败: {e}")
+            log_print(f"   ❌ Token显示创建失败: {e}")
             import traceback
             log_print(traceback.format_exc())
         
@@ -387,10 +397,17 @@ class MainScreen(BoxLayout):
         """启动服务"""
         self.add_log("🚀 正在启动服务...")
         
-        # 检查Token
-        token = self.token_input.text.strip()
+        # 检查Token（从配置读取）
+        token = ""
+        if self.config_mgr:
+            try:
+                config = self.config_mgr.get_config()
+                token = config.get('token', '').strip()
+            except:
+                pass
+        
         if not token:
-            self.add_log("❌ 请先输入Token")
+            self.add_log("❌ 请先输入Token（点击'输入/更新Token'按钮）")
             return
         
         # 检查配置
@@ -463,18 +480,74 @@ class MainScreen(BoxLayout):
         
         self.add_log("✅ 服务已停止")
     
-    def save_token(self, instance):
-        """保存Token"""
-        token = self.token_input.text.strip()
+    def show_token_input_popup(self, instance):
+        """显示Token输入弹窗"""
+        log_print("🔧 显示Token输入弹窗...")
         
-        if not token:
-            self.add_log("❌ Token不能为空")
-            return
+        # 创建弹窗内容
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
         
-        # 去掉可能的 "Bearer " 前缀
-        if token.startswith('Bearer '):
-            token = token[7:]
+        # 标题
+        title_label = Label(text='请输入Token:', size_hint_y=None, height=40, **self._get_font_kwargs())
+        content.add_widget(title_label)
         
+        # TextInput（在Popup中创建，不会阻塞主界面）
+        try:
+            log_print("   在Popup中创建TextInput...")
+            token_input = TextInput(
+                text='',
+                multiline=False,
+                size_hint_y=None,
+                height=50,
+                font_size='14sp'
+            )
+            log_print("   ✅ Popup中的TextInput创建成功")
+            content.add_widget(token_input)
+        except Exception as e:
+            log_print(f"   ❌ Popup中TextInput创建失败: {e}")
+            error_label = Label(text=f'TextInput创建失败: {e}', **self._get_font_kwargs())
+            content.add_widget(error_label)
+            token_input = None
+        
+        # 按钮布局
+        btn_layout = BoxLayout(size_hint_y=None, height=50, spacing=10)
+        
+        # 保存按钮
+        def save_token_from_popup(btn):
+            if token_input:
+                token = token_input.text.strip()
+                if token:
+                    # 去掉可能的 "Bearer " 前缀
+                    if token.startswith('Bearer '):
+                        token = token[7:]
+                    self._save_token_internal(token)
+                    popup.dismiss()
+                else:
+                    self.add_log("❌ Token不能为空")
+            else:
+                self.add_log("❌ TextInput未创建")
+        
+        save_btn = Button(text='保存', on_press=save_token_from_popup, **self._get_font_kwargs())
+        btn_layout.add_widget(save_btn)
+        
+        # 取消按钮
+        cancel_btn = Button(text='取消', on_press=lambda btn: popup.dismiss(), **self._get_font_kwargs())
+        btn_layout.add_widget(cancel_btn)
+        
+        content.add_widget(btn_layout)
+        
+        # 创建并显示Popup
+        popup = Popup(
+            title='输入Token',
+            content=content,
+            size_hint=(0.8, 0.4),
+            auto_dismiss=False
+        )
+        popup.open()
+        log_print("   ✅ Token输入弹窗已显示")
+    
+    def _save_token_internal(self, token):
+        """内部保存Token方法"""
         self.add_log(f"💾 正在保存Token: {token[:20]}...")
         
         # 保存到配置
@@ -492,6 +565,11 @@ class MainScreen(BoxLayout):
                 self.grab_service.update_token(token, {})
             except Exception as e:
                 self.add_log(f"⚠️ 更新服务Token失败: {e}")
+        
+        # 更新显示
+        if hasattr(self, 'token_display'):
+            display_text = token[:20] + "..." if len(token) > 20 else token
+            self.token_display.text = display_text
         
         self.add_log("✅ Token保存成功")
     
@@ -538,11 +616,14 @@ class MainScreen(BoxLayout):
         """Token捕获回调"""
         self.add_log(f"🎯 捕获到新Token: {token[:20]}...")
         
-        # 更新输入框
-        self.token_input.text = token
-        
         # 保存到配置
-        self.config_mgr.update_token(token, headers)
+        if self.config_mgr:
+            self.config_mgr.update_token(token, headers)
+        
+        # 更新显示
+        if hasattr(self, 'token_display'):
+            display_text = token[:20] + "..." if len(token) > 20 else token
+            self.token_display.text = display_text
         
         # 更新抢单服务
         if self.grab_service:
