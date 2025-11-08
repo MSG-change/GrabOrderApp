@@ -12,17 +12,21 @@ import requests
 import threading
 from datetime import datetime
 
-# 导入现有模块
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(parent_dir, '..'))
+# 导入现有模块（暂时禁用Geetest）
+# parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# sys.path.insert(0, os.path.join(parent_dir, '..'))
 
-try:
-    from geetest_helper_local import GeetestHelperLocal
-    from local_w_generator import LocalWGenerator
-except ImportError:
-    # 如果导入失败，使用内置版本
-    GeetestHelperLocal = None
-    LocalWGenerator = None
+# try:
+#     from geetest_helper_local import GeetestHelperLocal
+#     from local_w_generator import LocalWGenerator
+# except ImportError:
+#     # 如果导入失败，使用内置版本
+#     GeetestHelperLocal = None
+#     LocalWGenerator = None
+
+# 暂时禁用Geetest（简化启动）
+GeetestHelperLocal = None
+LocalWGenerator = None
 
 
 class GrabOrderService:
@@ -49,26 +53,33 @@ class GrabOrderService:
             'Host': 'dysh.dyswl.com',
         }
         
-        # Geetest 识别器
-        try:
-            # 确定模型路径（Android vs PC）
-            if os.path.exists('/data/data'):  # Android环境
-                # Android：模型在APK的assets目录中
-                model_path = os.path.join(parent_dir, 'assets', 'best_siamese_model.onnx')
-            else:  # PC环境
-                model_path = "best_siamese_model.onnx"
-            
-            self.geetest_helper = GeetestHelperLocal(
-                model_path=model_path,
-                captcha_id="045e2c229998a88721e32a763bc0f7b8"
-            )
-            # W参数生成器（Android自动使用远程API，PC使用本地JS）
-            self.w_generator = LocalWGenerator()
-            self.log("✅ Geetest识别器加载成功")
-        except Exception as e:
-            self.log(f"⚠️ Geetest识别器加载失败: {e}")
-            self.geetest_helper = None
-            self.w_generator = None
+        # Geetest 识别器（暂时禁用）
+        self.geetest_helper = None
+        self.w_generator = None
+        self.log("⚠️ Geetest识别器暂时禁用（简化版本）")
+        
+        # try:
+        #     if GeetestHelperLocal and LocalWGenerator:
+        #         # 确定模型路径（Android vs PC）
+        #         if os.path.exists('/data/data'):  # Android环境
+        #             # Android：模型在APK的assets目录中
+        #             model_path = os.path.join(parent_dir, 'assets', 'best_siamese_model.onnx')
+        #         else:  # PC环境
+        #             model_path = "best_siamese_model.onnx"
+        #         
+        #         self.geetest_helper = GeetestHelperLocal(
+        #             model_path=model_path,
+        #             captcha_id="045e2c229998a88721e32a763bc0f7b8"
+        #         )
+        #         # W参数生成器（Android自动使用远程API，PC使用本地JS）
+        #         self.w_generator = LocalWGenerator()
+        #         self.log("✅ Geetest识别器加载成功")
+        #     else:
+        #         self.log("⚠️ Geetest模块未加载")
+        # except Exception as e:
+        #     self.log(f"⚠️ Geetest识别器加载失败: {e}")
+        #     self.geetest_helper = None
+        #     self.w_generator = None
         
         # 运行控制
         self.running = False

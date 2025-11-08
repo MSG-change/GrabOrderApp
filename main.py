@@ -35,9 +35,25 @@ except ImportError:
 
 # 导入业务逻辑
 sys.path.insert(0, os.path.dirname(__file__))
-from src.vpn_service import VPNTokenCapture
-from src.grab_service import GrabOrderService
-from src.config_manager import ConfigManager
+
+# 安全导入，避免启动崩溃
+try:
+    from src.vpn_service import VPNTokenCapture
+except Exception as e:
+    print(f"⚠️ VPN服务导入失败: {e}")
+    VPNTokenCapture = None
+
+try:
+    from src.grab_service import GrabOrderService
+except Exception as e:
+    print(f"⚠️ 抢单服务导入失败: {e}")
+    GrabOrderService = None
+
+try:
+    from src.config_manager import ConfigManager
+except Exception as e:
+    print(f"⚠️ 配置管理器导入失败: {e}")
+    ConfigManager = None
 
 
 class MainScreen(BoxLayout):
@@ -53,8 +69,16 @@ class MainScreen(BoxLayout):
         self.padding = 20
         self.spacing = 10
         
-        # 配置管理器
-        self.config_mgr = ConfigManager()
+        # 配置管理器（安全初始化）
+        try:
+            if ConfigManager:
+                self.config_mgr = ConfigManager()
+            else:
+                self.config_mgr = None
+                print("⚠️ 配置管理器不可用")
+        except Exception as e:
+            print(f"❌ 配置管理器初始化失败: {e}")
+            self.config_mgr = None
         
         # VPN Token 捕获服务
         self.vpn_service = None
@@ -70,6 +94,16 @@ class MainScreen(BoxLayout):
         
         # 定时更新UI
         Clock.schedule_interval(self.update_ui, 0.5)
+        
+        # 启动日志
+        self.add_log("🚀 抢单助手已启动")
+        self.add_log(f"📱 Android模式: {ANDROID}")
+        if not ConfigManager:
+            self.add_log("⚠️ 配置管理器加载失败")
+        if not GrabOrderService:
+            self.add_log("⚠️ 抢单服务加载失败")
+        if not VPNTokenCapture:
+            self.add_log("⚠️ VPN服务加载失败")
     
     def build_ui(self):
         """构建用户界面"""
@@ -196,6 +230,16 @@ class MainScreen(BoxLayout):
     def _start_grab_service(self):
         """后台启动抢单服务"""
         try:
+            if not GrabOrderService:
+                self.add_log("❌ 抢单服务模块未加载")
+                self.stop_service(None)
+                return
+            
+            if not self.config_mgr:
+                self.add_log("❌ 配置管理器不可用")
+                self.stop_service(None)
+                return
+            
             config = self.config_mgr.get_config()
             
             self.grab_service = GrabOrderService(
@@ -209,6 +253,8 @@ class MainScreen(BoxLayout):
             
         except Exception as e:
             self.add_log(f"❌ 启动失败: {e}")
+            import traceback
+            self.add_log(traceback.format_exc())
             self.stop_service(None)
     
     def stop_service(self, instance):
@@ -366,25 +412,42 @@ class GrabOrderApp(App):
     def register_fonts(self):
         """注册中文字体"""
         try:
+            print("🔤 开始注册中文字体...")
+            
             # 获取字体路径
             if ANDROID:
-                # Android：字体在APK的assets目录
-                font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf')
+                # Android：尝试多个可能的路径
+                font_paths = [
+                    os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
+                    '/data/data/com.graborder.graborder/files/fonts/DroidSansFallback.ttf',
+                    'fonts/DroidSansFallback.ttf',
+                ]
             else:
                 # PC：相对路径
-                font_path = 'fonts/DroidSansFallback.ttf'
+                font_paths = ['fonts/DroidSansFallback.ttf']
             
-            if os.path.exists(font_path):
-                # 注册为默认字体
-                LabelBase.register(
-                    name='Roboto',  # Kivy默认字体名称
-                    fn_regular=font_path
-                )
-                print(f"✅ 中文字体加载成功: {font_path}")
-            else:
-                print(f"⚠️ 字体文件不存在: {font_path}")
+            font_loaded = False
+            for font_path in font_paths:
+                print(f"   尝试路径: {font_path}")
+                if os.path.exists(font_path):
+                    # 注册为默认字体
+                    LabelBase.register(
+                        name='Roboto',  # Kivy默认字体名称
+                        fn_regular=font_path
+                    )
+                    print(f"✅ 中文字体加载成功: {font_path}")
+                    font_loaded = True
+                    break
+            
+            if not font_loaded:
+                print(f"⚠️ 未找到字体文件，使用系统默认字体")
+                print(f"   当前目录: {os.getcwd()}")
+                print(f"   __file__: {__file__}")
+                
         except Exception as e:
             print(f"❌ 字体加载失败: {e}")
+            import traceback
+            print(traceback.format_exc())
     
     def request_android_permissions(self):
         """请求Android权限"""
