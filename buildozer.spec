@@ -11,7 +11,9 @@ package.domain = com.graborder
 
 # 主程序入口
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf
+source.entry_point = main_beautiful.py
+source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
+source.include_patterns = assets/*,libs/*,src/*
 
 # 版本号
 version = 1.0.0
