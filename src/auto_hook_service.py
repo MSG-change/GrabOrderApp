@@ -88,14 +88,36 @@ class AutoHookService:
     def _connect_and_hook(self):
         """连接并 Hook（后台线程）"""
         try:
-            self.log("🔧 连接 Frida...")
+            self.log("=" * 50)
+            self.log("Connecting to Frida and Hooking")
+            self.log("=" * 50)
             
-            # 连接本地设备
-            self.device = frida.get_local_device()
-            self.log(f"✅ 已连接: {self.device}")
+            # 步骤1: 连接本地设备
+            self.log("[Step 1/3] Connecting to Frida device")
+            try:
+                self.device = frida.get_local_device()
+                self.log(f"   ✅ Connected: {self.device}")
+            except Exception as e:
+                self.log(f"   ❌ FAILED: Cannot connect to Frida")
+                self.log(f"   Error: {e}")
+                self.log("   Make sure Frida Server is running!")
+                self.running = False
+                return
             
-            # 等待目标应用启动
-            self.log(f"📱 等待目标应用: {self.target_package}")
+            # 步骤2: 附加目标应用
+            self.log("[Step 2/3] Attaching to target app")
+            self.log(f"   Target: {self.target_package}")
+            
+            # 先检查应用是否在运行
+            try:
+                processes = self.device.enumerate_processes()
+                target_running = any(p.name == self.target_package or self.target_package in str(p) for p in processes)
+                if not target_running:
+                    self.log("   ⚠️ Target app not running, waiting...")
+                else:
+                    self.log("   ✅ Target app is running")
+            except Exception as e:
+                self.log(f"   ⚠️ Cannot enumerate processes: {e}")
             
             max_retries = 30  # 最多等待 30 秒
             for i in range(max_retries):
@@ -105,43 +127,56 @@ class AutoHookService:
                 try:
                     # 尝试附加
                     self.session = self.device.attach(self.target_package)
-                    self.log("✅ 已附加到目标应用")
+                    self.log("   ✅ Attached to target app")
                     break
                     
                 except frida.ProcessNotFoundError:
                     if i == 0:
-                        self.log("   请在目标应用中进行操作...")
+                        self.log("   Waiting for target app to start...")
+                        self.log("   Please open the target app now")
+                    elif i % 5 == 0:
+                        self.log(f"   Still waiting... ({i}/{max_retries}s)")
                     time.sleep(1)
                     continue
             else:
-                self.log("❌ 目标应用未运行或附加超时")
+                self.log("❌ FAILED: Target app not found or attach timeout")
+                self.log(f"   Package: {self.target_package}")
+                self.log("   Please check:")
+                self.log("   1. Is the package name correct?")
+                self.log("   2. Is the app installed?")
+                self.log("   3. Is the app running?")
                 self.running = False
                 return
             
-            # 加载 Hook 脚本
+            # 步骤3: 加载 Hook 脚本
+            self.log("[Step 3/3] Loading Hook script")
             script_code = self._load_hook_script()
             if not script_code:
-                self.log("❌ Hook 脚本加载失败")
+                self.log("❌ FAILED: Hook script loading failed")
                 self.running = False
                 return
             
-            self.log("🔧 加载 Hook 脚本...")
+            self.log("   Injecting script...")
             self.script = self.session.create_script(script_code)
             self.script.on('message', self._on_message)
             self.script.load()
             
             self.hooked = True
-            self.log("✅ Hook 已激活")
-            self.log("   等待目标应用发送网络请求...")
+            self.log("✅ Hook activated successfully")
+            self.log("=" * 50)
+            self.log("Waiting for network requests...")
+            self.log("Please operate in the target app")
+            self.log("(e.g. open order list, pull to refresh)")
+            self.log("=" * 50)
             
             # 保持运行
             while self.running:
                 time.sleep(1)
                 
         except Exception as e:
-            self.log(f"❌ Hook 失败: {e}")
+            self.log(f"❌ Hook exception: {e}")
             import traceback
-            self.log(traceback.format_exc()[:200])
+            self.log(traceback.format_exc()[:300])
             self.running = False
             self.hooked = False
     

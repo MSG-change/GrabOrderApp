@@ -227,57 +227,97 @@ class FridaManager:
     def start_frida_server(self):
         """启动 Frida Server"""
         try:
-            # 检查 Root
-            if not self.has_root:
-                if not self.check_root():
-                    if not self.request_root():
-                        self.log("❌ 需要 Root 权限才能启动 Frida Server")
-                        return False
+            self.log("=" * 50)
+            self.log("Starting Frida Server")
+            self.log("=" * 50)
             
-            # 检查是否已运行
+            # 步骤1: 检查 Root
+            self.log("[Step 1/4] Checking Root permission")
+            if not self.has_root:
+                self.log("   Root not acquired yet, checking...")
+                if not self.check_root():
+                    self.log("   Requesting Root permission...")
+                    if not self.request_root():
+                        self.log("❌ FAILED: Root permission required")
+                        return False
+            else:
+                self.log("   ✅ Root already acquired")
+            
+            # 步骤2: 检查是否已运行
+            self.log("[Step 2/4] Checking if Frida is running")
             if self.check_frida_running():
-                self.log("✅ Frida Server 已在运行")
+                self.log("✅ Frida Server already running")
                 self.is_running = True
                 return True
+            else:
+                self.log("   Frida not running, need to start")
             
-            # 检查 Frida Server 是否存在
+            # 步骤3: 检查 Frida Server 是否存在
+            self.log("[Step 3/4] Checking Frida binary")
             result = subprocess.run(
-                ['su', '-c', f'ls {self.server_dest}'],
+                ['su', '-c', f'ls -la {self.server_dest}'],
                 capture_output=True,
                 timeout=5
             )
             
             if result.returncode != 0:
-                self.log("⚠️ Frida Server 不存在，开始提取...")
+                self.log("   Frida binary not found, extracting...")
                 if not self.extract_frida_server():
+                    self.log("❌ FAILED: Cannot extract Frida Server")
                     return False
+            else:
+                output = result.stdout.decode('utf-8', errors='ignore')
+                self.log(f"   ✅ Frida binary exists: {output.strip()}")
             
-            # 启动 Frida Server
-            self.log("🚀 启动 Frida Server...")
+            # 步骤4: 启动 Frida Server
+            self.log("[Step 4/4] Starting Frida Server")
+            self.log(f"   Executing: {self.server_dest}")
             
+            # 先杀掉旧进程（如果有）
+            subprocess.run(
+                ['su', '-c', 'killall frida-server'],
+                capture_output=True,
+                timeout=3
+            )
+            time.sleep(0.5)
+            
+            # 启动新进程
             subprocess.Popen(
-                ['su', '-c', f'{self.server_dest} &'],
+                ['su', '-c', f'{self.server_dest} -D'],  # -D = daemonize
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
             
-            # 等待启动
-            self.log("   等待启动...")
-            time.sleep(2)
+            # 等待启动并验证
+            self.log("   Waiting for startup...")
+            for i in range(5):
+                time.sleep(1)
+                if self.check_frida_running():
+                    self.is_running = True
+                    self.log("✅ Frida Server started successfully")
+                    self.log("=" * 50)
+                    return True
+                self.log(f"   Attempt {i+1}/5...")
             
-            # 验证
-            if self.check_frida_running():
-                self.is_running = True
-                self.log("✅ Frida Server 启动成功")
-                return True
+            # 如果失败，检查错误原因
+            self.log("❌ FAILED: Frida Server did not start")
+            result = subprocess.run(
+                ['su', '-c', f'{self.server_dest} --version'],
+                capture_output=True,
+                timeout=3
+            )
+            if result.returncode == 0:
+                self.log(f"   Binary is valid: {result.stdout.decode().strip()}")
+                self.log("   But failed to start in background")
             else:
-                self.log("❌ Frida Server 启动失败")
-                return False
+                self.log(f"   Binary test failed: {result.stderr.decode().strip()}")
+            
+            return False
                 
         except Exception as e:
-            self.log(f"❌ 启动失败: {e}")
+            self.log(f"❌ Exception during startup: {e}")
             import traceback
-            self.log(traceback.format_exc()[:200])
+            self.log(traceback.format_exc()[:300])
             return False
     
     def stop_frida_server(self):

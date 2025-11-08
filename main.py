@@ -175,7 +175,7 @@ class MainScreen(BoxLayout):
         
         # 配置
         self.api_base_url = "https://dysh.dyswl.com"
-        self.target_package = "com.dyswl.dysh"
+        self.target_package = "com.dys.shzs"  # ✅ 修正为正确的目标包名
         
         # 构建 UI
         self.build_ui()
@@ -643,16 +643,28 @@ class FastGrabOrderApp(App):
         log_print("📱 App paused - keeping services running")
         return True  # 返回 True 保持应用在后台运行
     
+    @mainthread
     def on_resume(self):
-        """应用恢复前台 - 刷新界面"""
-        log_print("📱 App resumed - refreshing UI")
+        """应用恢复前台 - 强制重绘界面（线程安全）"""
+        log_print("📱 App resumed - forcing UI redraw")
         try:
-            # 强制刷新主窗口
             if self.root:
+                # 方法1: 强制刷新canvas
                 self.root.canvas.ask_update()
-                log_print("   ✅ UI refresh requested")
+                
+                # 方法2: 强制重绘所有子Widget
+                for child in self.root.walk():
+                    if hasattr(child, 'canvas'):
+                        child.canvas.ask_update()
+                
+                # 方法3: 触发尺寸变化强制刷新
+                Window.trigger_keyboard_height(0)
+                
+                log_print("   ✅ UI redraw completed")
         except Exception as e:
-            log_print(f"   ⚠️ UI refresh error: {e}")
+            log_print(f"   ⚠️ UI redraw error: {e}")
+            import traceback
+            log_print(f"   {traceback.format_exc()[:200]}")
 
 
 if __name__ == '__main__':
