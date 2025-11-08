@@ -64,20 +64,43 @@ class MainScreen(BoxLayout):
     is_running = BooleanProperty(False)
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.orientation = 'vertical'
-        self.padding = 20
-        self.spacing = 10
+        print("=" * 50)
+        print("🔧 MainScreen.__init__ 开始")
+        print("=" * 50)
+        
+        try:
+            super().__init__(**kwargs)
+            print("✅ super().__init__ 完成")
+        except Exception as e:
+            print(f"❌ super().__init__ 失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            raise
+        
+        try:
+            self.orientation = 'vertical'
+            self.padding = 20
+            self.spacing = 10
+            print("✅ 基础属性设置完成")
+        except Exception as e:
+            print(f"❌ 基础属性设置失败: {e}")
+        
+        # 先初始化日志缓冲（避免后续调用add_log时出错）
+        self.log_buffer = []
+        print("✅ 日志缓冲初始化完成")
         
         # 配置管理器（安全初始化）
         try:
             if ConfigManager:
                 self.config_mgr = ConfigManager()
+                print("✅ 配置管理器初始化成功")
             else:
                 self.config_mgr = None
                 print("⚠️ 配置管理器不可用")
         except Exception as e:
             print(f"❌ 配置管理器初始化失败: {e}")
+            import traceback
+            print(traceback.format_exc())
             self.config_mgr = None
         
         # VPN Token 捕获服务
@@ -86,36 +109,63 @@ class MainScreen(BoxLayout):
         # 抢单服务
         self.grab_service = None
         
-        # 构建UI
-        self.build_ui()
+        print("🔧 开始构建UI...")
+        try:
+            # 构建UI
+            self.build_ui()
+            print("✅ UI构建完成")
+        except Exception as e:
+            print(f"❌ UI构建失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            # 即使UI构建失败，也创建一个最简单的显示
+            self.add_widget(Label(text=f"UI构建失败: {e}", color=(1, 0, 0, 1)))
         
-        # 日志缓冲
-        self.log_buffer = []
+        print("🔧 设置定时更新...")
+        try:
+            # 定时更新UI
+            Clock.schedule_interval(self.update_ui, 0.5)
+            print("✅ 定时更新设置完成")
+        except Exception as e:
+            print(f"❌ 定时更新设置失败: {e}")
         
-        # 定时更新UI
-        Clock.schedule_interval(self.update_ui, 0.5)
+        # 启动日志（延迟到UI构建后）
+        try:
+            self.add_log("🚀 抢单助手已启动")
+            self.add_log(f"📱 Android模式: {ANDROID}")
+            if not ConfigManager:
+                self.add_log("⚠️ 配置管理器加载失败")
+            if not GrabOrderService:
+                self.add_log("⚠️ 抢单服务加载失败")
+            if not VPNTokenCapture:
+                self.add_log("⚠️ VPN服务加载失败")
+            print("✅ 启动日志输出完成")
+        except Exception as e:
+            print(f"❌ 启动日志输出失败: {e}")
         
-        # 启动日志
-        self.add_log("🚀 抢单助手已启动")
-        self.add_log(f"📱 Android模式: {ANDROID}")
-        if not ConfigManager:
-            self.add_log("⚠️ 配置管理器加载失败")
-        if not GrabOrderService:
-            self.add_log("⚠️ 抢单服务加载失败")
-        if not VPNTokenCapture:
-            self.add_log("⚠️ VPN服务加载失败")
+        print("=" * 50)
+        print("✅ MainScreen.__init__ 完成")
+        print("=" * 50)
     
     def build_ui(self):
         """构建用户界面"""
+        print("🔧 build_ui() 开始")
         
-        # 标题
-        title = Label(
-            text='🚀 抢单助手',
-            size_hint_y=0.1,
-            font_size='24sp',
-            bold=True
-        )
-        self.add_widget(title)
+        try:
+            # 标题
+            print("   创建标题...")
+            title = Label(
+                text='🚀 抢单助手',
+                size_hint_y=0.1,
+                font_size='24sp',
+                bold=True
+            )
+            self.add_widget(title)
+            print("   ✅ 标题添加完成")
+        except Exception as e:
+            print(f"   ❌ 标题创建失败: {e}")
+            import traceback
+            print(traceback.format_exc())
         
         # 状态显示
         status_box = BoxLayout(size_hint_y=0.1, spacing=10)
@@ -398,56 +448,116 @@ class GrabOrderApp(App):
     
     def build(self):
         """构建应用"""
-        Window.clearcolor = (0.1, 0.1, 0.1, 1)
+        print("=" * 50)
+        print("🚀 GrabOrderApp.build() 开始")
+        print("=" * 50)
         
-        # 注册中文字体
-        self.register_fonts()
+        try:
+            print("🔧 设置窗口颜色...")
+            Window.clearcolor = (0.1, 0.1, 0.1, 1)
+            print("✅ 窗口颜色设置完成")
+        except Exception as e:
+            print(f"❌ 窗口颜色设置失败: {e}")
         
-        # 请求权限
-        if ANDROID:
-            self.request_android_permissions()
+        try:
+            print("🔧 注册中文字体...")
+            self.register_fonts()
+            print("✅ 字体注册完成")
+        except Exception as e:
+            print(f"❌ 字体注册失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            # 继续执行，不因为字体失败而停止
         
-        return MainScreen()
+        try:
+            if ANDROID:
+                print("🔧 请求Android权限...")
+                self.request_android_permissions()
+                print("✅ 权限请求完成")
+            else:
+                print("💻 PC环境，跳过权限请求")
+        except Exception as e:
+            print(f"❌ 权限请求失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            # 继续执行，不因为权限失败而停止
+        
+        try:
+            print("🔧 创建MainScreen...")
+            screen = MainScreen()
+            print("✅ MainScreen创建完成")
+            print("=" * 50)
+            print("🎉 GrabOrderApp.build() 完成")
+            print("=" * 50)
+            return screen
+        except Exception as e:
+            print(f"❌ MainScreen创建失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            # 返回一个最简单的Label显示错误
+            error_label = Label(
+                text=f"启动失败: {e}\n\n请查看日志",
+                color=(1, 0, 0, 1),
+                text_size=(Window.width - 40, None)
+            )
+            return error_label
     
     def register_fonts(self):
         """注册中文字体"""
         try:
             print("🔤 开始注册中文字体...")
+            print(f"   当前目录: {os.getcwd()}")
+            print(f"   __file__: {os.path.abspath(__file__) if '__file__' in globals() else 'N/A'}")
             
             # 获取字体路径
             if ANDROID:
                 # Android：尝试多个可能的路径
+                base_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else '.'
                 font_paths = [
-                    os.path.join(os.path.dirname(__file__), 'fonts', 'DroidSansFallback.ttf'),
+                    os.path.join(base_dir, 'fonts', 'DroidSansFallback.ttf'),
                     '/data/data/com.graborder.graborder/files/fonts/DroidSansFallback.ttf',
                     'fonts/DroidSansFallback.ttf',
+                    './fonts/DroidSansFallback.ttf',
                 ]
             else:
                 # PC：相对路径
-                font_paths = ['fonts/DroidSansFallback.ttf']
+                font_paths = [
+                    'fonts/DroidSansFallback.ttf',
+                    './fonts/DroidSansFallback.ttf',
+                ]
             
             font_loaded = False
             for font_path in font_paths:
-                print(f"   尝试路径: {font_path}")
-                if os.path.exists(font_path):
-                    # 注册为默认字体
-                    LabelBase.register(
-                        name='Roboto',  # Kivy默认字体名称
-                        fn_regular=font_path
-                    )
-                    print(f"✅ 中文字体加载成功: {font_path}")
-                    font_loaded = True
-                    break
+                try:
+                    abs_path = os.path.abspath(font_path)
+                    print(f"   尝试路径: {font_path} (绝对路径: {abs_path})")
+                    if os.path.exists(font_path):
+                        print(f"   ✅ 文件存在")
+                        # 注册为默认字体
+                        LabelBase.register(
+                            name='Roboto',  # Kivy默认字体名称
+                            fn_regular=font_path
+                        )
+                        print(f"✅ 中文字体加载成功: {font_path}")
+                        font_loaded = True
+                        break
+                    else:
+                        print(f"   ❌ 文件不存在")
+                except Exception as e:
+                    print(f"   ⚠️ 路径 {font_path} 检查失败: {e}")
+                    continue
             
             if not font_loaded:
-                print(f"⚠️ 未找到字体文件，使用系统默认字体")
-                print(f"   当前目录: {os.getcwd()}")
-                print(f"   __file__: {__file__}")
+                print(f"⚠️ 未找到字体文件，使用系统默认字体（可能显示方块）")
+                print(f"   请确保字体文件存在于以下位置之一:")
+                for path in font_paths:
+                    print(f"     - {path}")
                 
         except Exception as e:
-            print(f"❌ 字体加载失败: {e}")
+            print(f"❌ 字体加载过程出错: {e}")
             import traceback
             print(traceback.format_exc())
+            print("⚠️ 继续使用系统默认字体")
     
     def request_android_permissions(self):
         """请求Android权限"""
@@ -471,5 +581,39 @@ class GrabOrderApp(App):
 
 
 if __name__ == '__main__':
-    GrabOrderApp().run()
+    print("=" * 50)
+    print("🚀 抢单助手启动")
+    print("=" * 50)
+    print(f"Python版本: {sys.version}")
+    print(f"工作目录: {os.getcwd()}")
+    print(f"Android模式: {ANDROID}")
+    print("=" * 50)
+    
+    try:
+        app = GrabOrderApp()
+        print("✅ GrabOrderApp实例创建成功")
+        print("🔧 开始运行应用...")
+        app.run()
+    except Exception as e:
+        print("=" * 50)
+        print("❌ 应用启动失败！")
+        print("=" * 50)
+        print(f"错误: {e}")
+        import traceback
+        print(traceback.format_exc())
+        print("=" * 50)
+        # 尝试显示错误信息（如果Kivy可用）
+        try:
+            from kivy.app import App
+            from kivy.uix.label import Label
+            
+            class ErrorApp(App):
+                def build(self):
+                    return Label(
+                        text=f"启动失败:\n{e}\n\n请查看日志",
+                        color=(1, 0, 0, 1)
+                    )
+            ErrorApp().run()
+        except:
+            pass
 

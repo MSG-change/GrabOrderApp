@@ -27,15 +27,25 @@ except ImportError as e:
 
 try:
     # 根据环境选择W生成器
-    try:
-        from jnius import autoclass
-        # Android环境：使用远程API
+    # 优先检测Android环境
+    import os
+    is_android = os.path.exists('/data/data') or os.path.exists('/system/bin/app_process')
+    
+    if is_android:
+        # Android环境：强制使用远程API（避免execjs依赖）
+        print("🤖 检测到Android环境，使用远程API生成W参数")
         from android_w_generator import AndroidWGenerator as LocalWGenerator
         print("✅ AndroidWGenerator 导入成功")
-    except ImportError:
-        # PC环境：使用本地JS
-        from local_w_generator import LocalWGenerator
-        print("✅ LocalWGenerator 导入成功")
+    else:
+        # PC环境：使用本地JS（需要Node.js）
+        print("💻 检测到PC环境，使用本地JS生成W参数")
+        try:
+            from local_w_generator import LocalWGenerator
+            print("✅ LocalWGenerator 导入成功")
+        except ImportError as e:
+            print(f"⚠️ LocalWGenerator导入失败（可能缺少execjs/nodejs）: {e}")
+            print("   回退到AndroidWGenerator（远程API）")
+            from android_w_generator import AndroidWGenerator as LocalWGenerator
 except ImportError as e:
     print(f"⚠️ W生成器导入失败: {e}")
     LocalWGenerator = None

@@ -14,15 +14,23 @@ import io
 from siamese_onnx import SiameseONNX
 
 # 根据环境选择W参数生成器
-try:
-    # Android环境：使用远程API生成器（不需要execjs）
-    from jnius import autoclass
+import os
+is_android = os.path.exists('/data/data') or os.path.exists('/system/bin/app_process')
+
+if is_android:
+    # Android环境：强制使用远程API（避免execjs依赖）
+    print("   🤖 Android环境 → 使用远程API生成W参数")
     from android_w_generator import AndroidWGenerator as LocalWGenerator
-    print("   使用Android W参数生成器（远程API）")
-except ImportError:
-    # PC环境：使用本地JS执行器
-    from local_w_generator import LocalWGenerator
-    print("   使用PC W参数生成器（execjs）")
+else:
+    # PC环境：尝试使用本地JS
+    print("   💻 PC环境 → 尝试使用本地JS生成W参数")
+    try:
+        from local_w_generator import LocalWGenerator
+        print("      ✅ LocalWGenerator加载成功（需要Node.js）")
+    except ImportError as e:
+        print(f"      ⚠️ LocalWGenerator加载失败: {e}")
+        print("      → 回退到远程API")
+        from android_w_generator import AndroidWGenerator as LocalWGenerator
 
 
 class GeetestHelperLocal:
