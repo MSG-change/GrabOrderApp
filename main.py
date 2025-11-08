@@ -49,22 +49,25 @@ sys.path.insert(0, os.path.dirname(__file__))
 try:
     from src.frida_manager import FridaManager
     FRIDA_MANAGER_AVAILABLE = True
+    log_print("✅ FridaManager imported successfully")
 except Exception as e:
-    log_print(f"⚠️ Frida 管理器导入失败: {e}")
+    log_print(f"❌ Frida Manager import failed: {e}")
     FRIDA_MANAGER_AVAILABLE = False
 
 try:
     from src.auto_hook_service import AutoHookService
     AUTO_HOOK_AVAILABLE = True
+    log_print("✅ AutoHookService imported successfully")
 except Exception as e:
-    log_print(f"⚠️ Auto Hook 服务导入失败: {e}")
+    log_print(f"❌ Auto Hook Service import failed: {e}")
     AUTO_HOOK_AVAILABLE = False
 
 try:
     from src.fast_grab_service import FastGrabOrderService
     GRAB_SERVICE_AVAILABLE = True
+    log_print("✅ FastGrabOrderService imported successfully")
 except Exception as e:
-    log_print(f"⚠️ 抢单服务导入失败: {e}")
+    log_print(f"❌ Grab Service import failed: {e}")
     GRAB_SERVICE_AVAILABLE = False
 
 
@@ -381,21 +384,33 @@ class MainScreen(BoxLayout):
     
     def start_all_services(self, instance):
         """启动所有服务"""
-        self.add_log("")
-        self.add_log("=" * 50)
-        self.add_log("Starting services...")
-        self.add_log("=" * 50)
-        
-        # 禁用启动按钮，启用停止按钮
-        self.start_btn.disabled = True
-        self.stop_btn.disabled = False
-        
-        # 在后台线程启动
-        threading.Thread(target=self._start_services_background, daemon=True).start()
+        try:
+            log_print("🔵 START BUTTON CLICKED!")  # 调试日志
+            self.add_log("")
+            self.add_log("=" * 50)
+            self.add_log("Starting services...")
+            self.add_log("=" * 50)
+            
+            # 检查模块可用性
+            log_print(f"Frida Manager Available: {FRIDA_MANAGER_AVAILABLE}")
+            log_print(f"Auto Hook Available: {AUTO_HOOK_AVAILABLE}")
+            log_print(f"Grab Service Available: {GRAB_SERVICE_AVAILABLE}")
+            
+            # 禁用启动按钮，启用停止按钮
+            self.start_btn.disabled = True
+            self.stop_btn.disabled = False
+            
+            # 在后台线程启动
+            threading.Thread(target=self._start_services_background, daemon=True).start()
+        except Exception as e:
+            log_print(f"❌ START FAILED AT BEGINNING: {e}")
+            import traceback
+            log_print(traceback.format_exc())
     
     def _start_services_background(self):
         """后台启动所有服务"""
         try:
+            log_print("🔵 BACKGROUND THREAD STARTED")  # 调试日志
             # 1. 启动 Frida Server
             self.add_log("")
             self.add_log("[Step 1/4] Starting Frida Server")
