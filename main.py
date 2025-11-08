@@ -610,10 +610,20 @@ class FastGrabOrderApp(App):
             log_print(f"权限请求失败: {e}")
     
     def on_pause(self):
-        return True
+        """应用进入后台 - 保持运行"""
+        log_print("📱 App paused - keeping services running")
+        return True  # 返回 True 保持应用在后台运行
     
     def on_resume(self):
-        pass
+        """应用恢复前台 - 刷新界面"""
+        log_print("📱 App resumed - refreshing UI")
+        try:
+            # 强制刷新主窗口
+            if self.root:
+                self.root.canvas.ask_update()
+                log_print("   ✅ UI refresh requested")
+        except Exception as e:
+            log_print(f"   ⚠️ UI refresh error: {e}")
 
 
 if __name__ == '__main__':

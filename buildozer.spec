@@ -16,7 +16,7 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*,fonts/*
 
 # 版本号
-version = 1.0.5
+version = 1.0.6
 
 # 应用需求（Python 包）
 # 完全移除numpy依赖（使用纯Python + PIL + Java ONNX Runtime）
@@ -68,7 +68,8 @@ android.gradle_dependencies = com.microsoft.onnxruntime:onnxruntime-android:1.15
 # AndroidManifest.xml 额外配置
 android.manifest.intent_filters = 
 
-# 应用主题
+# 应用主题和硬件加速（修复黑屏）
+android.manifest.application = {"android:hardwareAccelerated": "true", "android:largeHeap": "true"}
 android.manifest.application_meta_data = 
 
 # p4a额外参数
