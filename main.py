@@ -68,6 +68,34 @@ except Exception as e:
     GRAB_SERVICE_AVAILABLE = False
 
 
+# ==================== 字体注册（官方方案，修复中文乱码）====================
+from kivy.core.text import LabelBase
+from kivy.resources import resource_add_path
+
+# 添加字体路径
+app_dir = os.path.dirname(os.path.abspath(__file__))
+fonts_dir = os.path.join(app_dir, 'fonts')
+if os.path.exists(fonts_dir):
+    resource_add_path(fonts_dir)
+    log_print(f"✅ 字体路径已添加: {fonts_dir}")
+else:
+    log_print(f"⚠️ 字体目录不存在: {fonts_dir}")
+
+# 注册中文字体（官方 API: LabelBase.register）
+try:
+    LabelBase.register(
+        name='ChineseFont',
+        fn_regular='DroidSansFallback.ttf'
+    )
+    log_print("✅ 中文字体注册成功: DroidSansFallback.ttf")
+except Exception as e:
+    log_print(f"⚠️ 字体注册失败: {e}")
+    # 如果注册失败，使用 Kivy 默认字体（可能显示方块）
+    import traceback
+    log_print(traceback.format_exc())
+# ========================================================================
+
+
 class RoundedButton(Button):
     """圆角按钮"""
     def __init__(self, **kwargs):
@@ -110,7 +138,8 @@ class StatusCard(BoxLayout):
             text=title,
             font_size='12sp',
             size_hint_y=0.4,
-            color=(0.7, 0.7, 0.7, 1)
+            color=(0.7, 0.7, 0.7, 1),
+            font_name='ChineseFont'
         )
         self.add_widget(self.title_label)
         
@@ -120,7 +149,8 @@ class StatusCard(BoxLayout):
             font_size='15sp',
             bold=True,
             size_hint_y=0.6,
-            color=(1, 1, 1, 1)
+            color=(1, 1, 1, 1),
+            font_name='ChineseFont'
         )
         self.add_widget(self.value_label)
     
@@ -201,7 +231,8 @@ class MainScreen(BoxLayout):
             font_size='24sp',
             bold=True,
             color=(1, 1, 1, 1),
-            size_hint_x=0.8
+            size_hint_x=0.8,
+            font_name='ChineseFont'
         )
         header.add_widget(title)
         header.add_widget(Widget(size_hint_x=0.1))
@@ -247,7 +278,8 @@ class MainScreen(BoxLayout):
             text='📱 目标应用',
             size_hint_x=0.35,
             font_size='13sp',
-            color=(0.8, 0.8, 0.8, 1)
+            color=(0.8, 0.8, 0.8, 1),
+            font_name='ChineseFont'
         )
         app_box.add_widget(app_label)
         
@@ -259,7 +291,8 @@ class MainScreen(BoxLayout):
             background_color=(0.2, 0.2, 0.23, 1),
             foreground_color=(1, 1, 1, 1),
             cursor_color=(0.3, 0.7, 1, 1),
-            padding=[10, 8]
+            padding=[10, 8],
+            font_name='ChineseFont'
         )
         app_box.add_widget(self.package_input)
         config_panel.add_widget(app_box)
@@ -270,7 +303,8 @@ class MainScreen(BoxLayout):
             text='⏱️ 检查间隔',
             size_hint_x=0.35,
             font_size='13sp',
-            color=(0.8, 0.8, 0.8, 1)
+            color=(0.8, 0.8, 0.8, 1),
+            font_name='ChineseFont'
         )
         interval_box.add_widget(interval_label)
         
@@ -280,7 +314,8 @@ class MainScreen(BoxLayout):
             size_hint_x=0.65,
             font_size='12sp',
             background_color=(0.2, 0.2, 0.23, 1),
-            color=(1, 1, 1, 1)
+            color=(1, 1, 1, 1),
+            font_name='ChineseFont'
         )
         interval_box.add_widget(self.interval_spinner)
         config_panel.add_widget(interval_box)
@@ -291,7 +326,8 @@ class MainScreen(BoxLayout):
             text='🏷️ 商品类别',
             size_hint_x=0.35,
             font_size='13sp',
-            color=(0.8, 0.8, 0.8, 1)
+            color=(0.8, 0.8, 0.8, 1),
+            font_name='ChineseFont'
         )
         category_box.add_widget(category_label)
         
@@ -303,7 +339,8 @@ class MainScreen(BoxLayout):
             background_color=(0.2, 0.2, 0.23, 1),
             foreground_color=(1, 1, 1, 1),
             cursor_color=(0.3, 0.7, 1, 1),
-            padding=[10, 8]
+            padding=[10, 8],
+            font_name='ChineseFont'
         )
         category_box.add_widget(self.category_input)
         config_panel.add_widget(category_box)
@@ -314,13 +351,13 @@ class MainScreen(BoxLayout):
         btn_container = BoxLayout(size_hint_y=0.12, spacing=15, padding=[10, 5])
         
         # 启动按钮
-        self.start_btn = RoundedButton(text='🚀 启动抢单', font_size='16sp', bold=True)
+        self.start_btn = RoundedButton(text='🚀 启动抢单', font_size='16sp', bold=True, font_name='ChineseFont')
         self.start_btn.set_color(0.2, 0.7, 0.3)  # 绿色
         self.start_btn.bind(on_press=self.start_all_services)
         btn_container.add_widget(self.start_btn)
         
         # 停止按钮
-        self.stop_btn = RoundedButton(text='⏹️ 停止', font_size='16sp', bold=True)
+        self.stop_btn = RoundedButton(text='⏹️ 停止', font_size='16sp', bold=True, font_name='ChineseFont')
         self.stop_btn.set_color(0.7, 0.2, 0.2)  # 红色
         self.stop_btn.disabled = True
         self.stop_btn.bind(on_press=self.stop_all_services)
@@ -335,7 +372,8 @@ class MainScreen(BoxLayout):
             font_size='14sp',
             bold=True,
             color=(0.9, 0.9, 0.9, 1),
-            halign='left'
+            halign='left',
+            font_name='ChineseFont'
         )
         log_header.bind(size=log_header.setter('text_size'))
         self.add_widget(log_header)
@@ -360,7 +398,8 @@ class MainScreen(BoxLayout):
             valign='top',
             font_size='11sp',
             color=(0.85, 0.85, 0.85, 1),
-            padding=[10, 10]
+            padding=[10, 10],
+            font_name='ChineseFont'
         )
         self.log_display.bind(texture_size=self.log_display.setter('size'))
         self.log_display.bind(size=self.log_display.setter('text_size'))

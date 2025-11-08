@@ -13,10 +13,10 @@ package.domain = com.graborder
 source.dir = .
 source.entry_point = main_beautiful.py
 source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
-source.include_patterns = assets/*,libs/*,src/*
+source.include_patterns = assets/*,libs/*,src/*,fonts/*
 
 # 版本号
-version = 1.0.2
+version = 1.0.3
 
 # 应用需求（Python 包）
 # 完全移除numpy依赖（使用纯Python + PIL + Java ONNX Runtime）
