@@ -11,6 +11,40 @@ import threading
 import logging
 from datetime import datetime
 
+# Android日志输出
+try:
+    from jnius import autoclass
+    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    ANDROID_LOG = True
+    
+    def android_log(level, tag, message):
+        """输出日志到Android logcat"""
+        Log = autoclass('android.util.Log')
+        if level == 'd':
+            Log.d(tag, message)
+        elif level == 'i':
+            Log.i(tag, message)
+        elif level == 'w':
+            Log.w(tag, message)
+        elif level == 'e':
+            Log.e(tag, message)
+        else:
+            Log.i(tag, message)
+    
+    def log_print(*args, **kwargs):
+        """重定向print到Android日志"""
+        message = ' '.join(str(arg) for arg in args)
+        android_log('i', 'GrabOrder', message)
+        # 同时输出到标准输出（如果可用）
+        try:
+            print(*args, **kwargs)
+        except:
+            pass
+except ImportError:
+    ANDROID_LOG = False
+    def log_print(*args, **kwargs):
+        print(*args, **kwargs)
+
 # Kivy 核心
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -40,19 +74,19 @@ sys.path.insert(0, os.path.dirname(__file__))
 try:
     from src.vpn_service import VPNTokenCapture
 except Exception as e:
-    print(f"⚠️ VPN服务导入失败: {e}")
+    log_print(f"⚠️ VPN服务导入失败: {e}")
     VPNTokenCapture = None
 
 try:
     from src.grab_service import GrabOrderService
 except Exception as e:
-    print(f"⚠️ 抢单服务导入失败: {e}")
+    log_print(f"⚠️ 抢单服务导入失败: {e}")
     GrabOrderService = None
 
 try:
     from src.config_manager import ConfigManager
 except Exception as e:
-    print(f"⚠️ 配置管理器导入失败: {e}")
+    log_print(f"⚠️ 配置管理器导入失败: {e}")
     ConfigManager = None
 
 
@@ -64,43 +98,43 @@ class MainScreen(BoxLayout):
     is_running = BooleanProperty(False)
     
     def __init__(self, **kwargs):
-        print("=" * 50)
-        print("🔧 MainScreen.__init__ 开始")
-        print("=" * 50)
+        log_print("=" * 50)
+        log_print("🔧 MainScreen.__init__ 开始")
+        log_print("=" * 50)
         
         try:
             super().__init__(**kwargs)
-            print("✅ super().__init__ 完成")
+            log_print("✅ super().__init__ 完成")
         except Exception as e:
-            print(f"❌ super().__init__ 失败: {e}")
+            log_print(f"❌ super().__init__ 失败: {e}")
             import traceback
-            print(traceback.format_exc())
+            log_print(traceback.format_exc())
             raise
         
         try:
             self.orientation = 'vertical'
             self.padding = 20
             self.spacing = 10
-            print("✅ 基础属性设置完成")
+            log_print("✅ 基础属性设置完成")
         except Exception as e:
-            print(f"❌ 基础属性设置失败: {e}")
+            log_print(f"❌ 基础属性设置失败: {e}")
         
         # 先初始化日志缓冲（避免后续调用add_log时出错）
         self.log_buffer = []
-        print("✅ 日志缓冲初始化完成")
+        log_print("✅ 日志缓冲初始化完成")
         
         # 配置管理器（安全初始化）
         try:
             if ConfigManager:
                 self.config_mgr = ConfigManager()
-                print("✅ 配置管理器初始化成功")
+                log_print("✅ 配置管理器初始化成功")
             else:
                 self.config_mgr = None
-                print("⚠️ 配置管理器不可用")
+                log_print("⚠️ 配置管理器不可用")
         except Exception as e:
-            print(f"❌ 配置管理器初始化失败: {e}")
+            log_print(f"❌ 配置管理器初始化失败: {e}")
             import traceback
-            print(traceback.format_exc())
+            log_print(traceback.format_exc())
             self.config_mgr = None
         
         # VPN Token 捕获服务
@@ -109,25 +143,25 @@ class MainScreen(BoxLayout):
         # 抢单服务
         self.grab_service = None
         
-        print("🔧 开始构建UI...")
+        log_print("🔧 开始构建UI...")
         try:
             # 构建UI
             self.build_ui()
-            print("✅ UI构建完成")
+            log_print("✅ UI构建完成")
         except Exception as e:
-            print(f"❌ UI构建失败: {e}")
+            log_print(f"❌ UI构建失败: {e}")
             import traceback
-            print(traceback.format_exc())
+            log_print(traceback.format_exc())
             # 即使UI构建失败，也创建一个最简单的显示
             self.add_widget(Label(text=f"UI构建失败: {e}", color=(1, 0, 0, 1)))
         
-        print("🔧 设置定时更新...")
+        log_print("🔧 设置定时更新...")
         try:
             # 定时更新UI
             Clock.schedule_interval(self.update_ui, 0.5)
-            print("✅ 定时更新设置完成")
+            log_print("✅ 定时更新设置完成")
         except Exception as e:
-            print(f"❌ 定时更新设置失败: {e}")
+            log_print(f"❌ 定时更新设置失败: {e}")
         
         # 启动日志（延迟到UI构建后）
         try:
@@ -139,21 +173,21 @@ class MainScreen(BoxLayout):
                 self.add_log("⚠️ 抢单服务加载失败")
             if not VPNTokenCapture:
                 self.add_log("⚠️ VPN服务加载失败")
-            print("✅ 启动日志输出完成")
+            log_print("✅ 启动日志输出完成")
         except Exception as e:
-            print(f"❌ 启动日志输出失败: {e}")
+            log_print(f"❌ 启动日志输出失败: {e}")
         
-        print("=" * 50)
-        print("✅ MainScreen.__init__ 完成")
-        print("=" * 50)
+        log_print("=" * 50)
+        log_print("✅ MainScreen.__init__ 完成")
+        log_print("=" * 50)
     
     def build_ui(self):
         """构建用户界面"""
-        print("🔧 build_ui() 开始")
+        log_print("🔧 build_ui() 开始")
         
         try:
             # 标题
-            print("   创建标题...")
+            log_print("   创建标题...")
             title = Label(
                 text='🚀 抢单助手',
                 size_hint_y=0.1,
@@ -161,11 +195,11 @@ class MainScreen(BoxLayout):
                 bold=True
             )
             self.add_widget(title)
-            print("   ✅ 标题添加完成")
+            log_print("   ✅ 标题添加完成")
         except Exception as e:
-            print(f"   ❌ 标题创建失败: {e}")
+            log_print(f"   ❌ 标题创建失败: {e}")
             import traceback
-            print(traceback.format_exc())
+            log_print(traceback.format_exc())
         
         # 状态显示
         status_box = BoxLayout(size_hint_y=0.1, spacing=10)
@@ -330,35 +364,6 @@ class MainScreen(BoxLayout):
         
         self.add_log("✅ 服务已停止")
     
-    def start_vpn(self):
-        """启动VPN抓包"""
-        try:
-            self.add_log("🔒 正在启动VPN抓包...")
-            
-            self.vpn_service = VPNTokenCapture(
-                token_callback=self.on_token_captured,
-                log_callback=self.add_log
-            )
-            
-            if ANDROID:
-                # Android 上启动 VPN Service
-                self.vpn_service.start_vpn()
-            else:
-                # PC 上模拟
-                self.add_log("⚠️ PC模式，VPN抓包已禁用")
-        
-        except Exception as e:
-            self.add_log(f"❌ VPN启动失败: {e}")
-    
-    def toggle_vpn(self, instance, value):
-        """切换VPN抓包"""
-        if value:
-            self.add_log("✅ VPN自动抓包已启用")
-        else:
-            self.add_log("⚠️ VPN自动抓包已禁用")
-            if self.vpn_service:
-                self.vpn_service.stop()
-    
     def save_token(self, instance):
         """保存Token"""
         token = self.token_input.text.strip()
@@ -374,11 +379,20 @@ class MainScreen(BoxLayout):
         self.add_log(f"💾 正在保存Token: {token[:20]}...")
         
         # 保存到配置
-        self.config_mgr.update_token(token, {})
+        if self.config_mgr:
+            try:
+                self.config_mgr.update_token(token, {})
+            except Exception as e:
+                self.add_log(f"⚠️ 配置保存失败: {e}")
+        else:
+            self.add_log("⚠️ 配置管理器不可用，Token仅保存在内存")
         
         # 更新抢单服务
         if self.grab_service:
-            self.grab_service.update_token(token, {})
+            try:
+                self.grab_service.update_token(token, {})
+            except Exception as e:
+                self.add_log(f"⚠️ 更新服务Token失败: {e}")
         
         self.add_log("✅ Token保存成功")
     
@@ -396,18 +410,28 @@ class MainScreen(BoxLayout):
     def start_vpn(self):
         """启动VPN抓包"""
         try:
+            if not VPNTokenCapture:
+                self.add_log("❌ VPN服务模块未加载")
+                self.vpn_switch.active = False
+                return
+            
             self.vpn_service = VPNTokenCapture(
                 token_callback=self.on_token_captured,
                 log_callback=self.add_log
             )
             
-            success = self.vpn_service.start_vpn()
-            
-            if not success:
+            if ANDROID:
+                success = self.vpn_service.start_vpn()
+                if not success:
+                    self.vpn_switch.active = False
+            else:
+                self.add_log("⚠️ PC模式，VPN抓包不可用")
                 self.vpn_switch.active = False
                 
         except Exception as e:
             self.add_log(f"❌ VPN启动失败: {e}")
+            import traceback
+            self.add_log(traceback.format_exc())
             self.vpn_switch.active = False
     
     @mainthread
@@ -448,52 +472,52 @@ class GrabOrderApp(App):
     
     def build(self):
         """构建应用"""
-        print("=" * 50)
-        print("🚀 GrabOrderApp.build() 开始")
-        print("=" * 50)
+        log_print("=" * 50)
+        log_print("🚀 GrabOrderApp.build() 开始")
+        log_print("=" * 50)
         
         try:
-            print("🔧 设置窗口颜色...")
+            log_print("🔧 设置窗口颜色...")
             Window.clearcolor = (0.1, 0.1, 0.1, 1)
-            print("✅ 窗口颜色设置完成")
+            log_print("✅ 窗口颜色设置完成")
         except Exception as e:
-            print(f"❌ 窗口颜色设置失败: {e}")
+            log_print(f"❌ 窗口颜色设置失败: {e}")
         
         try:
-            print("🔧 注册中文字体...")
+            log_print("🔧 注册中文字体...")
             self.register_fonts()
-            print("✅ 字体注册完成")
+            log_print("✅ 字体注册完成")
         except Exception as e:
-            print(f"❌ 字体注册失败: {e}")
+            log_print(f"❌ 字体注册失败: {e}")
             import traceback
-            print(traceback.format_exc())
+            log_print(traceback.format_exc())
             # 继续执行，不因为字体失败而停止
         
         try:
             if ANDROID:
-                print("🔧 请求Android权限...")
+                log_print("🔧 请求Android权限...")
                 self.request_android_permissions()
-                print("✅ 权限请求完成")
+                log_print("✅ 权限请求完成")
             else:
-                print("💻 PC环境，跳过权限请求")
+                log_print("💻 PC环境，跳过权限请求")
         except Exception as e:
-            print(f"❌ 权限请求失败: {e}")
+            log_print(f"❌ 权限请求失败: {e}")
             import traceback
-            print(traceback.format_exc())
+            log_print(traceback.format_exc())
             # 继续执行，不因为权限失败而停止
         
         try:
-            print("🔧 创建MainScreen...")
+            log_print("🔧 创建MainScreen...")
             screen = MainScreen()
-            print("✅ MainScreen创建完成")
-            print("=" * 50)
-            print("🎉 GrabOrderApp.build() 完成")
-            print("=" * 50)
+            log_print("✅ MainScreen创建完成")
+            log_print("=" * 50)
+            log_print("🎉 GrabOrderApp.build() 完成")
+            log_print("=" * 50)
             return screen
         except Exception as e:
-            print(f"❌ MainScreen创建失败: {e}")
+            log_print(f"❌ MainScreen创建失败: {e}")
             import traceback
-            print(traceback.format_exc())
+            log_print(traceback.format_exc())
             # 返回一个最简单的Label显示错误
             error_label = Label(
                 text=f"启动失败: {e}\n\n请查看日志",
@@ -505,9 +529,9 @@ class GrabOrderApp(App):
     def register_fonts(self):
         """注册中文字体"""
         try:
-            print("🔤 开始注册中文字体...")
-            print(f"   当前目录: {os.getcwd()}")
-            print(f"   __file__: {os.path.abspath(__file__) if '__file__' in globals() else 'N/A'}")
+            log_print("🔤 开始注册中文字体...")
+            log_print(f"   当前目录: {os.getcwd()}")
+            log_print(f"   __file__: {os.path.abspath(__file__) if '__file__' in globals() else 'N/A'}")
             
             # 获取字体路径
             if ANDROID:
@@ -530,34 +554,34 @@ class GrabOrderApp(App):
             for font_path in font_paths:
                 try:
                     abs_path = os.path.abspath(font_path)
-                    print(f"   尝试路径: {font_path} (绝对路径: {abs_path})")
+                    log_print(f"   尝试路径: {font_path} (绝对路径: {abs_path})")
                     if os.path.exists(font_path):
-                        print(f"   ✅ 文件存在")
+                        log_print(f"   ✅ 文件存在")
                         # 注册为默认字体
                         LabelBase.register(
                             name='Roboto',  # Kivy默认字体名称
                             fn_regular=font_path
                         )
-                        print(f"✅ 中文字体加载成功: {font_path}")
+                        log_print(f"✅ 中文字体加载成功: {font_path}")
                         font_loaded = True
                         break
                     else:
-                        print(f"   ❌ 文件不存在")
+                        log_print(f"   ❌ 文件不存在")
                 except Exception as e:
-                    print(f"   ⚠️ 路径 {font_path} 检查失败: {e}")
+                    log_print(f"   ⚠️ 路径 {font_path} 检查失败: {e}")
                     continue
             
             if not font_loaded:
-                print(f"⚠️ 未找到字体文件，使用系统默认字体（可能显示方块）")
-                print(f"   请确保字体文件存在于以下位置之一:")
+                log_print(f"⚠️ 未找到字体文件，使用系统默认字体（可能显示方块）")
+                log_print(f"   请确保字体文件存在于以下位置之一:")
                 for path in font_paths:
-                    print(f"     - {path}")
+                    log_print(f"     - {path}")
                 
         except Exception as e:
-            print(f"❌ 字体加载过程出错: {e}")
+            log_print(f"❌ 字体加载过程出错: {e}")
             import traceback
-            print(traceback.format_exc())
-            print("⚠️ 继续使用系统默认字体")
+            log_print(traceback.format_exc())
+            log_print("⚠️ 继续使用系统默认字体")
     
     def request_android_permissions(self):
         """请求Android权限"""
@@ -581,27 +605,27 @@ class GrabOrderApp(App):
 
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("🚀 抢单助手启动")
-    print("=" * 50)
-    print(f"Python版本: {sys.version}")
-    print(f"工作目录: {os.getcwd()}")
-    print(f"Android模式: {ANDROID}")
-    print("=" * 50)
+    log_print("=" * 50)
+    log_print("🚀 抢单助手启动")
+    log_print("=" * 50)
+    log_print(f"Python版本: {sys.version}")
+    log_print(f"工作目录: {os.getcwd()}")
+    log_print(f"Android模式: {ANDROID}")
+    log_print("=" * 50)
     
     try:
         app = GrabOrderApp()
-        print("✅ GrabOrderApp实例创建成功")
-        print("🔧 开始运行应用...")
+        log_print("✅ GrabOrderApp实例创建成功")
+        log_print("🔧 开始运行应用...")
         app.run()
     except Exception as e:
-        print("=" * 50)
-        print("❌ 应用启动失败！")
-        print("=" * 50)
-        print(f"错误: {e}")
+        log_print("=" * 50)
+        log_print("❌ 应用启动失败！")
+        log_print("=" * 50)
+        log_print(f"错误: {e}")
         import traceback
-        print(traceback.format_exc())
-        print("=" * 50)
+        log_print(traceback.format_exc())
+        log_print("=" * 50)
         # 尝试显示错误信息（如果Kivy可用）
         try:
             from kivy.app import App
