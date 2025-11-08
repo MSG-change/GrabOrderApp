@@ -444,8 +444,11 @@ class MainScreen(BoxLayout):
                 self._on_start_failed()
                 return
             
-            self.frida_status = "Running"
-            Clock.schedule_once(lambda dt: self.frida_card.set_value("Running", (0.3, 0.9, 0.3, 1)), 0)
+            # ✅ 状态更新也需要异步调度到主线程
+            def update_frida_status(dt):
+                self.frida_status = "Running"
+                self.frida_card.set_value("Running", (0.3, 0.9, 0.3, 1))
+            Clock.schedule_once(update_frida_status, 0)
             
             # 2. 启动 Hook 服务
             self._add_log_direct("")
@@ -471,8 +474,11 @@ class MainScreen(BoxLayout):
                 self._on_start_failed()
                 return
             
-            self.hook_status = "Connecting"
-            Clock.schedule_once(lambda dt: self.hook_card.set_value("Connecting", (1, 0.8, 0.3, 1)), 0)
+            # ✅ 状态更新也需要异步调度到主线程
+            def update_hook_status(dt):
+                self.hook_status = "Connecting"
+                self.hook_card.set_value("Connecting", (1, 0.8, 0.3, 1))
+            Clock.schedule_once(update_hook_status, 0)
             
             # 3. 初始化抢单服务
             self._add_log_direct("")

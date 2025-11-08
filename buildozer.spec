@@ -16,12 +16,13 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*,fonts/*
 
 # 版本号
-version = 1.1.1
+version = 1.1.2
 
 # 应用需求（Python 包）
 # 完全移除numpy依赖（使用纯Python + PIL + Java ONNX Runtime）
 # Android使用远程API生成W参数，不需要execjs
-requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android
+# ✅ frida-tools包含frida库，用于Hook和动态分析
+requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android,frida-tools
 
 # 图标和启动画面
 #icon.filename = %(source.dir)s/assets/icon.png
