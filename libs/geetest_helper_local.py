@@ -166,6 +166,54 @@ class GeetestHelperLocal:
         Returns:
             验证结果字典或None
         """
+        # 尝试使用远程AI服务（如果配置了）
+        ai_server_url = os.environ.get('AI_SERVER_URL')
+        if ai_server_url:
+            try:
+                print(f"   🌐 使用远程AI服务: {ai_server_url}")
+                response = requests.post(
+                    f"{ai_server_url}/api/v1/recognize",
+                    json={
+                        'captcha_id': self.captcha_id,
+                        'challenge': challenge
+                    },
+                    timeout=15
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('success'):
+                        print(f"   ✅ 远程识别成功: {result.get('answers')}")
+                        
+                        # 生成W参数
+                        pic_index = ",".join(map(str, result['answers']))
+                        pow_detail = result.get('pow_detail', {})
+                        
+                        w_param = self.w_generator.generate_w(
+                            lot_number=result['lot_number'],
+                            captcha_id=self.captcha_id,
+                            version=str(pow_detail.get('version', '1')),
+                            bits=int(pow_detail.get('bits', 0)),
+                            datetime=pow_detail.get('datetime', ''),
+                            hashfunc=pow_detail.get('hashfunc', 'md5'),
+                            pic_index=pic_index
+                        )
+                        
+                        if w_param:
+                            return {
+                                'success': True,
+                                'lot_number': result['lot_number'],
+                                'captcha_output': w_param,
+                                'pass_token': result.get('process_token', ''),
+                                'gen_time': int(time.time()),
+                                'answers': result['answers']
+                            }
+                        
+            except Exception as e:
+                print(f"   ⚠️  远程AI失败: {e}，使用本地处理")
+        
+        # 原有的本地处理逻辑
+        print("   📱 使用本地处理")
         session = requests.Session()
         
         try:
