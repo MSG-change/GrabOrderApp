@@ -11,8 +11,14 @@ import hashlib
 from typing import Optional, Dict, List
 from PIL import Image
 import io
-import torch
-from siamese_network import SiameseNetwork, get_transforms
+try:
+    import torch
+    from siamese_network import SiameseNetwork, get_transforms
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    print("⚠️  PyTorch not available, Siamese model disabled")
+
 from local_w_generator import LocalWGenerator
 
 
@@ -46,26 +52,38 @@ class GeetestHelperLocal:
             print(f"   请确保 jiyanv4/gcaptcha4_click.js 文件存在")
             raise
         
-        # 加载模型
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print(f"   设备: {self.device}")
-        
-        self.model = SiameseNetwork(feature_dim=512)
-        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
-        
-        # 处理不同的checkpoint格式
-        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            accuracy = checkpoint.get('val_acc', 0) * 100
-            print(f"   模型准确率: {accuracy:.2f}%")
+        # 加载模型（如果torch可用）
+        if TORCH_AVAILABLE:
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            print(f"   设备: {self.device}")
+            
+            try:
+                self.model = SiameseNetwork(feature_dim=512)
+                checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+                
+                # 处理不同的checkpoint格式
+                if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                    self.model.load_state_dict(checkpoint['model_state_dict'])
+                    accuracy = checkpoint.get('val_acc', 0) * 100
+                    print(f"   模型准确率: {accuracy:.2f}%")
+                else:
+                    self.model.load_state_dict(checkpoint)
+                
+                self.model.to(self.device)
+                self.model.eval()
+                
+                # 获取图片变换
+                _, self.transform = get_transforms()
+            except Exception as e:
+                print(f"   ⚠️  模型加载失败: {e}")
+                print(f"   将使用备用方案（固定选择）")
+                self.model = None
+                self.transform = None
         else:
-            self.model.load_state_dict(checkpoint)
-        
-        self.model.to(self.device)
-        self.model.eval()
-        
-        # 获取图片变换
-        _, self.transform = get_transforms()
+            print("   📌 使用备用方案（无模型）")
+            self.model = None
+            self.transform = None
+            self.device = None
         
         # Android 客户端请求头
         self.android_headers = {
@@ -110,6 +128,10 @@ class GeetestHelperLocal:
     
     def predict_similarity(self, question_img: Image.Image, candidate_img: Image.Image) -> float:
         """预测相似度"""
+        if not TORCH_AVAILABLE or self.model is None:
+            # 备用方案：返回固定的相似度（选择前3个）
+            return 0.6  # 高于阈值，会被选中
+            
         try:
             # 转换为tensor
             question_tensor = self.transform(question_img).unsqueeze(0).to(self.device)
@@ -150,10 +172,16 @@ class GeetestHelperLocal:
         
         # 预测每个格子
         answers = []
-        for idx, cell in enumerate(cells):
-            score = self.predict_similarity(question_img, cell)
-            if score > self.threshold:
-                answers.append(idx)
+        
+        if not TORCH_AVAILABLE or self.model is None:
+            # 备用方案：固定选择前3个格子
+            answers = [0, 1, 2]
+            print(f"   📌 使用备用选择: {answers}")
+        else:
+            for idx, cell in enumerate(cells):
+                score = self.predict_similarity(question_img, cell)
+                if score > self.threshold:
+                    answers.append(idx)
         
         return answers
     

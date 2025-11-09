@@ -1,16 +1,32 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision.models as models
-import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
-import os
-import glob
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.utils.data import Dataset, DataLoader
+    from torchvision import transforms, models
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    print("⚠️  PyTorch not available in siamese_network.py")
+    # 创建dummy类以避免错误
+    class Dataset:
+        pass
+    class nn:
+        class Module:
+            pass
+
 from PIL import Image
 import numpy as np
 import random
 
-class SiameseDataset(Dataset):
+if TORCH_AVAILABLE:
+    BaseDataset = Dataset
+    BaseModule = nn.Module
+else:
+    BaseDataset = object
+    BaseModule = object
+
+class SiameseDataset(BaseDataset):
     """孪生网络数据集类"""
     
     def __init__(self, dataset_path: str, transform=None, mode='train', train_ratio=0.8, random_seed=42):
@@ -137,11 +153,12 @@ class SiameseDataset(Dataset):
         return question_img, pair_img, torch.tensor(label, dtype=torch.float32)
 
 
-class ResNetBackbone(nn.Module):
+class ResNetBackbone(BaseModule):
     """ResNet特征提取器"""
     
     def __init__(self, pretrained=True, feature_dim=512):
-        super(ResNetBackbone, self).__init__()
+        if TORCH_AVAILABLE:
+            super(ResNetBackbone, self).__init__()
         
         # 使用预训练的ResNet-18
         self.resnet = models.resnet18(pretrained=pretrained)
@@ -171,11 +188,12 @@ class ResNetBackbone(nn.Module):
         return features
 
 
-class SiameseNetwork(nn.Module):
+class SiameseNetwork(BaseModule):
     """孪生神经网络"""
     
     def __init__(self, feature_dim=512):
-        super(SiameseNetwork, self).__init__()
+        if TORCH_AVAILABLE:
+            super(SiameseNetwork, self).__init__()
         
         # 共享的特征提取器
         self.backbone = ResNetBackbone(pretrained=True, feature_dim=feature_dim)
@@ -245,6 +263,10 @@ class TripletLoss(nn.Module):
 
 def get_transforms():
     """获取数据变换"""
+    
+    if not TORCH_AVAILABLE:
+        # 无torch时返回None
+        return None, None
     
     train_transform = transforms.Compose([
         transforms.Resize((224, 224)),
