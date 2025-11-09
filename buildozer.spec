@@ -16,14 +16,14 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*
 
 # Version
-version = 1.2.6
+version = 1.2.7
 
 # Application requirements (Python packages)
 # Removed numpy dependency (using pure Python + PIL + Java ONNX Runtime)
 # Android uses remote API for W parameter generation, no execjs needed
 # Note: Frida removed from requirements to avoid architecture conflicts
 # The app will use external Frida server approach for MuMu emulator
-requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android
+requirements = python3,kivy==2.3.0,pillow,requests,pyjnius,android,cython
 
 # Frida ARM64 specific configuration
 android.whitelist =
@@ -93,6 +93,8 @@ android.manifest.application_meta_data =
 p4a.bootstrap = sdl2
 # Use develop branch for better Kivy 2.3.0 compatibility
 p4a.branch = develop
+# Force rebuild to ensure Cython files are generated
+p4a.force_build = True
 # Use pre-built dist to skip libffi compilation
 # p4a.skip_update = True  
 
