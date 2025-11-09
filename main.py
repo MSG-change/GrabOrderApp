@@ -427,6 +427,30 @@ class MainScreen(BoxLayout):
         tenant_box.add_widget(self.tenant_id_input)
         config_panel.add_widget(tenant_box)
         
+        # Category ID input
+        category_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        category_label = Label(
+            text='Category',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1),
+        )
+        category_box.add_widget(category_label)
+        
+        self.category_id_input = TextInput(
+            text='131',
+            hint_text='Product Category ID',
+            multiline=False,
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(0.3, 0.7, 1, 1),
+            padding=[10, 8],
+        )
+        category_box.add_widget(self.category_id_input)
+        config_panel.add_widget(category_box)
+        
         self.add_widget(config_panel)
         
         # 控制按钮
@@ -515,7 +539,8 @@ class MainScreen(BoxLayout):
                 'manual_token': self.token_input.text.strip(),  # 手动输入的 Token
                 'club_id': self.club_id_input.text.strip() or '27',
                 'role_id': self.role_id_input.text.strip() or '317',
-                'tenant_id': self.tenant_id_input.text.strip() or '212'
+                'tenant_id': self.tenant_id_input.text.strip() or '212',
+                'category_id': self.category_id_input.text.strip() or '131'
             }
             
             # 在后台线程启动
@@ -689,8 +714,8 @@ class MainScreen(BoxLayout):
             else:
                 self.grab_service.check_interval = 3
             
-            # category_id 使用默认值
-            self.grab_service.category_id = '2469'
+            # category_id 从 UI 配置读取
+            self.grab_service.category_id = ui_config.get('category_id', '131')
             
             # 4. 等待自动捕获 Token
             self._add_log_direct("")
@@ -757,7 +782,7 @@ class MainScreen(BoxLayout):
             else:
                 self.grab_service.check_interval = 3
             
-            self.grab_service.category_id = '2469'
+            self.grab_service.category_id = ui_config.get('category_id', '131')
             
             self._add_log_direct("[OK] Grab service initialized")
             self._add_log_direct(f"[CONFIG] Check interval: {self.grab_service.check_interval}s")

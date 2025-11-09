@@ -60,7 +60,7 @@ class FastGrabOrderService:
         self.token = None
         self.headers = {
             'Content-Type': 'application/json',
-            'user-agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36',
+            'user-agent': 'Mozilla/5.0 (Linux; Android 12; 23127PN0CC Build/W528JS; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/95.0.4638.74 Mobile Safari/537.36 uni-app Html5Plus/1.0 (Immersed/24.0)',
             'Host': 'dysh.dyswl.com',
         }
         
@@ -78,8 +78,8 @@ class FastGrabOrderService:
         self.thread = None
         
         # 抢单参数
-        self.category_id = "2469"
-        self.check_interval = 1  # 检查间隔（秒），默认1秒更快
+        self.category_id = "131"  # Default from working script
+        self.check_interval = 2  # 检查间隔（秒），默认2秒
         
         # 性能优化
         self.executor = ThreadPoolExecutor(max_workers=3)  # 线程池
