@@ -510,63 +510,67 @@ class FastGrabOrderService:
             return False
     
     def _grab_with_geetest(self, order_id):
-        """带 Geetest 验证的抢单"""
+        """
+        带 Geetest 验证的抢单
+        使用九宫格验证方式
+        """
         try:
             # 延迟初始化 Geetest（避免启动慢）
             if not self._geetest_initialized:
                 self._init_geetest()
             
-            if not self.geetest_helper or not self.w_generator:
+            if not self.geetest_helper:
                 self.log("  [WARNING] Geetest solver not available")
                 return False
             
-            # 执行 Geetest 验证
-            geetest_data = self.geetest_helper.load_geetest()
-            if not geetest_data:
+            # ==================================================
+            # 步骤1: 九宫格验证（复制自 auto_monitor_and_grab.py）
+            # ==================================================
+            self.log("  [GEETEST] 开始九宫格验证...")
+            geetest_start = time.time()
+            
+            # 生成challenge（使用order_id）
+            challenge = GeetestHelperLocal.generate_challenge(str(order_id))
+            
+            # 执行九宫格验证
+            geetest_result = self.geetest_helper.verify(challenge=challenge)
+            
+            geetest_time = time.time() - geetest_start
+            
+            if not geetest_result or not geetest_result.get('success'):
+                error_msg = "Geetest验证失败"
+                if geetest_result:
+                    self.log(f"  [GEETEST] ❌ {error_msg}: {geetest_result}")
+                else:
+                    self.log(f"  [GEETEST] ❌ {error_msg}: 验证返回None")
                 return False
             
-            lot_number = geetest_data.get('lot_number')
-            question_url = f"http://static.geetest.com/{geetest_data['ques'][0]}"
-            grid_url = f"http://static.geetest.com/{geetest_data['imgs']}"
+            self.log(f"  [GEETEST] ✅ 九宫格验证成功 (耗时: {geetest_time:.2f}s)")
+            self.log(f"  [GEETEST] 识别答案: {geetest_result.get('answers', [])}")
             
-            pic_indices = self.geetest_helper.recognize_images(question_url, grid_url)
-            if not pic_indices:
-                return False
-            
-            pic_index_str = ','.join(map(str, pic_indices))
-            w_param = self.w_generator.generate_w(
-                lot_number=lot_number,
-                captcha_id=self.geetest_helper.captcha_id,
-                pic_index=pic_index_str,
-                **geetest_data['pow_detail']
-            )
-            
-            if not w_param:
-                return False
-            
-            # Get verification result
-            geetest_result = self.geetest_helper.verify_geetest(
-                lot_number=lot_number,
-                captcha_output=w_param,
-                pass_token=geetest_data['process_token'],
-                gen_time=int(time.time())
-            )
-            
-            if not geetest_result:
-                return False
-            
-            # Build nested geeDto structure (matching working script)
+            # ==================================================
+            # 步骤2: 构建 geeDto 参数（复制自 auto_monitor_and_grab.py）
+            # ==================================================
+            # 构建嵌套的 geeDto 结构
             gee_dto = {
                 'lotNumber': geetest_result.get('lot_number'),
                 'captchaOutput': geetest_result.get('captcha_output'),
                 'passToken': geetest_result.get('pass_token'),
-                'genTime': str(geetest_result.get('gen_time', int(time.time()))),
-                'captchaId': '045e2c229998a88721e32a763bc0f7b8',
-                'captchaKeyType': 'dlVerify'
+                'genTime': str(geetest_result.get('gen_time', int(time.time()))),  # 字符串格式
+                'captchaId': '045e2c229998a88721e32a763bc0f7b8',  # 固定值
+                'captchaKeyType': 'dlVerify'  # 固定值
             }
             
-            # Remove None values
+            # 移除None值
             gee_dto = {k: v for k, v in gee_dto.items() if v is not None}
+            
+            # 验证必需的参数
+            if not gee_dto.get('lotNumber') or not gee_dto.get('captchaOutput') or not gee_dto.get('passToken'):
+                self.log(f"  [GEETEST] ❌ 参数不完整")
+                self.log(f"    lotNumber: {'✅' if gee_dto.get('lotNumber') else '❌ 缺失'}")
+                self.log(f"    captchaOutput: {'✅' if gee_dto.get('captchaOutput') else '❌ 缺失'}")
+                self.log(f"    passToken: {'✅' if gee_dto.get('passToken') else '❌ 缺失'}")
+                return False
             
             # 转换 order_id 为整数
             try:
@@ -583,8 +587,13 @@ class FastGrabOrderService:
             # Send grab request with Geetest params
             url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
             
-            self.log(f"  [REQUEST] POST grabAnOrder/v1 with geeDto")
+            # ==================================================
+            # 步骤3: 发送抢单请求
+            # ==================================================
+            self.log(f"  [REQUEST] POST grabAnOrder/v1 with 九宫格验证")
             self.log(f"  [GEEDTO] lotNumber: {gee_dto.get('lotNumber', 'N/A')[:20]}...")
+            self.log(f"  [GEEDTO] captchaOutput: {gee_dto.get('captchaOutput', 'N/A')[:30]}...")
+            self.log(f"  [GEEDTO] passToken: {gee_dto.get('passToken', 'N/A')[:30]}...")
             
             response = self.session.post(url, json=payload)
             result = response.json()
@@ -606,35 +615,34 @@ class FastGrabOrderService:
             return False
     
     def _init_geetest(self):
-        """初始化 Geetest 识别器"""
+        """
+        初始化 Geetest 验证组件
+        使用本地模型进行九宫格验证
+        """
         if self._geetest_initialized:
             return
         
         try:
-            self.log("[INIT] Loading Geetest solver...")
+            self.log("[LOADING] 初始化九宫格验证器...")
             
-            if not GEETEST_AVAILABLE or not W_GENERATOR_AVAILABLE:
-                self.log("[WARNING] Geetest modules not available")
+            # 检查是否可用
+            if not GEETEST_AVAILABLE:
+                self.log("[WARNING] GeetestHelperLocal 不可用")
                 return
             
-            # 确定模型路径
-            if os.path.exists('/data/data'):
-                model_path = 'assets/best_siamese_model.onnx'
-            else:
-                model_path = 'best_siamese_model.onnx'
-            
+            # 初始化九宫格验证器
             self.geetest_helper = GeetestHelperLocal(
-                model_path=model_path,
-                captcha_id="045e2c229998a88721e32a763bc0f7b8"
+                model_path="best_siamese_model.pth",  # Siamese模型
+                captcha_id="045e2c229998a88721e32a763bc0f7b8",
+                threshold=0.5,
+                js_file_path="jiyanv4/gcaptcha4_click.js"  # JS文件路径
             )
             
-            self.w_generator = LocalWGenerator()
-            
             self._geetest_initialized = True
-            self.log("[OK] Geetest solver loaded")
+            self.log("[OK] 九宫格验证器加载完成")
         
         except Exception as e:
-            self.log(f"[WARNING] Geetest load failed: {e}")
+            self.log(f"[WARNING] 九宫格验证器加载失败: {e}")
     
     def _get_order_id(self, order):
         """获取订单 ID"""

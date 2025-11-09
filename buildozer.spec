@@ -11,14 +11,14 @@ package.domain = com.graborder
 
 # Main program entry
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,json,js,ttf
+source.include_exts = py,png,jpg,kv,atlas,json,js,ttf,pth
 
 # Version
-version = 1.5.1
+version = 1.6.0
 
 # Application requirements (Python packages)
 # Minimal requirements for stability
-requirements = python3,kivy==2.3.0,pillow,requests,pyjnius,android
+requirements = python3,kivy==2.3.0,pillow,requests,pyjnius,android,torch,torchvision,numpy,pyexecjs
 
 # Android configuration
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,SYSTEM_ALERT_WINDOW,FOREGROUND_SERVICE
