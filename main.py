@@ -355,6 +355,78 @@ class MainScreen(BoxLayout):
         token_box.add_widget(self.token_input)
         config_panel.add_widget(token_box)
         
+        # Club ID input
+        club_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        club_label = Label(
+            text='Club ID',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1),
+        )
+        club_box.add_widget(club_label)
+        
+        self.club_id_input = TextInput(
+            text='27',
+            hint_text='Club ID',
+            multiline=False,
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(0.3, 0.7, 1, 1),
+            padding=[10, 8],
+        )
+        club_box.add_widget(self.club_id_input)
+        config_panel.add_widget(club_box)
+        
+        # Role ID input
+        role_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        role_label = Label(
+            text='Role ID',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1),
+        )
+        role_box.add_widget(role_label)
+        
+        self.role_id_input = TextInput(
+            text='317',
+            hint_text='Role ID',
+            multiline=False,
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(0.3, 0.7, 1, 1),
+            padding=[10, 8],
+        )
+        role_box.add_widget(self.role_id_input)
+        config_panel.add_widget(role_box)
+        
+        # Tenant ID input
+        tenant_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        tenant_label = Label(
+            text='Tenant ID',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1),
+        )
+        tenant_box.add_widget(tenant_label)
+        
+        self.tenant_id_input = TextInput(
+            text='212',
+            hint_text='Tenant ID',
+            multiline=False,
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(0.3, 0.7, 1, 1),
+            padding=[10, 8],
+        )
+        tenant_box.add_widget(self.tenant_id_input)
+        config_panel.add_widget(tenant_box)
+        
         self.add_widget(config_panel)
         
         # 控制按钮
@@ -440,7 +512,10 @@ class MainScreen(BoxLayout):
             ui_config = {
                 'target_package': self.package_input.text.strip() or self.target_package,
                 'interval_text': self.interval_spinner.text,
-                'manual_token': self.token_input.text.strip()  # 手动输入的 Token
+                'manual_token': self.token_input.text.strip(),  # 手动输入的 Token
+                'club_id': self.club_id_input.text.strip() or '27',
+                'role_id': self.role_id_input.text.strip() or '317',
+                'tenant_id': self.tenant_id_input.text.strip() or '212'
             }
             
             # 在后台线程启动
@@ -695,9 +770,9 @@ class MainScreen(BoxLayout):
             
             self.grab_service.update_token({
                 'token': manual_token,
-                'club_id': '236',
-                'role_id': '1329',
-                'tenant_id': '559'
+                'club_id': ui_config.get('club_id', '27'),
+                'role_id': ui_config.get('role_id', '317'),
+                'tenant_id': ui_config.get('tenant_id', '212')
             })
             
             self.grab_service.start()
