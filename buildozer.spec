@@ -16,7 +16,7 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*
 
 # Version
-version = 1.2.1
+version = 1.2.2
 
 # Application requirements (Python packages)
 # Removed numpy dependency (using pure Python + PIL + Java ONNX Runtime)
