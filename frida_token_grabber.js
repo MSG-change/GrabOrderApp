@@ -22,8 +22,25 @@ var tokenData = {
     lastUpdate: 0
 };
 
+// 等待 Java 可用
+function waitForJava(callback) {
+    if (typeof Java !== 'undefined' && Java.available) {
+        callback();
+    } else {
+        console.log("[!] Java 未就绪，等待中...");
+        setTimeout(function() {
+            waitForJava(callback);
+        }, 100);
+    }
+}
+
 // 保存 Token 到文件
 function saveToken() {
+    if (typeof Java === 'undefined' || !Java.available) {
+        console.log("[!] Java 不可用，跳过文件保存");
+        return;
+    }
+    
     var File = Java.use("java.io.File");
     var FileWriter = Java.use("java.io.FileWriter");
     
@@ -172,20 +189,53 @@ function hookHttpURLConnection() {
     }
 }
 
-// 启动 Hook
-Java.perform(function() {
-    console.log("[*] 开始 Hook 网络请求...");
+// 启动 Hook（带重试和超时）
+var hookAttempts = 0;
+var maxAttempts = 30; // 最多尝试30秒
+
+function startHook() {
+    hookAttempts++;
     
-    // 延迟一点确保类加载
-    setTimeout(function() {
-        hookOkHttp3();
-        hookRetrofit();
-        hookHttpURLConnection();
-        
-        console.log("[✓] 所有 Hook 已激活");
-        console.log("[*] 等待目标 APP 发送网络请求...");
-    }, 1000);
-});
+    if (hookAttempts > maxAttempts) {
+        console.log("[✗] Java 环境初始化超时，放弃 Hook");
+        console.log("[!] 请检查应用是否正常运行");
+        return;
+    }
+    
+    if (typeof Java === 'undefined' || !Java.available) {
+        console.log("[!] Java 未就绪，1秒后重试... (" + hookAttempts + "/" + maxAttempts + ")");
+        setTimeout(startHook, 1000);
+        return;
+    }
+    
+    try {
+        Java.perform(function() {
+            console.log("[*] Java 环境已就绪！");
+            console.log("[*] 开始 Hook 网络请求...");
+            
+            // 延迟一点确保类加载
+            setTimeout(function() {
+                try {
+                    hookOkHttp3();
+                    hookRetrofit();
+                    hookHttpURLConnection();
+                    
+                    console.log("[✓] 所有 Hook 已激活");
+                    console.log("[*] 等待目标 APP 发送网络请求...");
+                } catch (hookError) {
+                    console.log("[!] Hook 过程出错: " + hookError);
+                }
+            }, 2000);
+        });
+    } catch (e) {
+        console.log("[!] Hook 启动失败，1秒后重试: " + e);
+        setTimeout(startHook, 1000);
+    }
+}
+
+// 延迟启动，等待 Java 环境初始化
+console.log("[*] 等待 Java 环境初始化...");
+setTimeout(startHook, 2000);
 
 // 处理来自 Python 的消息
 rpc.exports = {

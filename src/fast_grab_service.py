@@ -203,20 +203,29 @@ class FastGrabOrderService:
                 
                 if orders:
                     self.stats['orders_found'] += len(orders)
-                    self.log(f"🎯 发现 {len(orders)} 个订单")
+                    self.log(f"[FOUND] {len(orders)} order(s) available")
                     
-                    # 过滤已处理的订单
+                    # Filter processed orders
                     new_orders = self._filter_new_orders(orders)
                     
                     if new_orders:
-                        # 并发抢单（提高速度）
+                        # Log order details
+                        for order in new_orders:
+                            order_id = self._get_order_id(order)
+                            order_name = order.get('productName', 'N/A')
+                            order_price = order.get('orderPrice', 'N/A')
+                            self.log(f"  Order ID: {order_id}")
+                            self.log(f"  Product: {order_name}")
+                            self.log(f"  Price: {order_price}")
+                        
+                        # Concurrent grab
                         self._grab_orders_concurrent(new_orders)
                     else:
-                        self.log("   (所有订单已处理过)")
+                        self.log("  (All orders already processed)")
                     
                     consecutive_errors = 0
                 else:
-                    # 无订单时不输出，避免刷屏
+                    # No orders, silent to avoid spam
                     pass
                 
                 # 动态调整检查间隔
@@ -228,10 +237,11 @@ class FastGrabOrderService:
             
             except Exception as e:
                 consecutive_errors += 1
-                self.log(f"❌ 错误: {e}")
+                error_msg = f"[ERROR] Check failed: {str(e)}"
+                self.log(error_msg)
                 
                 if consecutive_errors >= 5:
-                    self.log("⚠️ 连续错误过多，暂停10秒")
+                    self.log("[WARNING] Too many errors, pausing 10s...")
                     time.sleep(10)
                     consecutive_errors = 0
                 else:
@@ -255,13 +265,15 @@ class FastGrabOrderService:
                     return order_list.get('list', [])
                 return order_list if isinstance(order_list, list) else []
             elif data.get('code') == 403:
-                self.log("⚠️ Token 已过期，等待新 Token...")
+                self.log("[AUTH] Token expired, please update token")
                 return []
             else:
+                msg = data.get('msg', 'Unknown error')
+                self.log(f"[API] Error code {data.get('code')}: {msg}")
                 return []
         
         except Exception as e:
-            raise Exception(f"获取订单失败: {e}")
+            raise Exception(f"Failed to get orders: {str(e)}")
     
     def _filter_new_orders(self, orders):
         """过滤新订单（避免重复抢单）"""
@@ -312,7 +324,7 @@ class FastGrabOrderService:
             try:
                 future.result(timeout=10)
             except Exception as e:
-                self.log(f"⚠️ 抢单线程异常: {e}")
+                self.log(f"[ERROR] Thread exception: {str(e)}")
     
     def _grab_order_fast(self, order):
         """快速抢单（单个订单）"""
@@ -337,12 +349,12 @@ class FastGrabOrderService:
             
             if result.get('code') == 200:
                 self.stats['grab_success'] += 1
-                self.log(f"   ✅ 抢单成功！订单: {order_id} ({grab_time:.2f}s)")
+                self.log(f"  [SUCCESS] Order {order_id} grabbed in {grab_time:.2f}s")
                 return True
             
             elif result.get('code') == 1001:
-                # 需要 Geetest 验证
-                self.log(f"   🔐 订单 {order_id} 需要验证")
+                # Needs Geetest verification
+                self.log(f"  [CAPTCHA] Order {order_id} requires verification")
                 success = self._grab_with_geetest(order_id)
                 if success:
                     self.stats['grab_success'] += 1
@@ -351,12 +363,13 @@ class FastGrabOrderService:
             else:
                 self.stats['grab_failed'] += 1
                 msg = result.get('msg', 'Unknown')
-                self.log(f"   ❌ 订单 {order_id} 抢单失败: {msg}")
+                code = result.get('code', 'N/A')
+                self.log(f"  [FAILED] Order {order_id}: Code {code} - {msg}")
                 return False
         
         except Exception as e:
             self.stats['grab_failed'] += 1
-            self.log(f"   ❌ 抢单异常: {e}")
+            self.log(f"  [ERROR] Grab exception: {str(e)}")
             return False
     
     def _grab_with_geetest(self, order_id):

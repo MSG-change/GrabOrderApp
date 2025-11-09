@@ -42,6 +42,7 @@ from kivy.properties import StringProperty, BooleanProperty, NumericProperty
 from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle, Rectangle
 from kivy.uix.widget import Widget
+from kivy.uix.popup import Popup
 
 # 导入业务逻辑
 sys.path.insert(0, os.path.dirname(__file__))
@@ -640,28 +641,30 @@ class MainScreen(BoxLayout):
         try:
             self._add_log_direct("")
             self._add_log_direct("=" * 50)
-            self._add_log_direct("🔑 Manual Token Mode")
+            self._add_log_direct("[MODE] Manual Token")
             self._add_log_direct("=" * 50)
             self._add_log_direct("")
             
-            # 移除 "Bearer " 前缀（如果有）
+            # Remove "Bearer " prefix if present
             if manual_token.startswith("Bearer "):
                 manual_token = manual_token[7:]
             
-            self._add_log_direct(f"Token: {manual_token[:30]}...")
-            self._add_log_direct("Skipping Frida and Hook services")
+            self._add_log_direct(f"[TOKEN] {manual_token[:30]}...")
+            self._add_log_direct("[INFO] Skipping Frida and Hook services")
             self._add_log_direct("")
             
             # 创建日志回调
             def log_callback(msg):
                 self._add_log_direct(msg)
             
-            # 初始化抢单服务
-            self._add_log_direct("[Step 1/2] Initializing Grab Service")
+            # Initialize grab service
+            self._add_log_direct("[STEP 1/2] Initializing Grab Service")
             self._add_log_direct("-" * 50)
             
             if not GRAB_SERVICE_AVAILABLE:
-                self._add_log_direct("ERROR: Grab Service not available")
+                error_msg = "[ERROR] Grab Service not available"
+                self._add_log_direct(error_msg)
+                self._show_error_popup("Service Error", error_msg)
                 self._on_start_failed()
                 return
             
@@ -683,11 +686,13 @@ class MainScreen(BoxLayout):
             
             self.grab_service.category_id = '2469'
             
-            self._add_log_direct("✅ Grab service initialized")
+            self._add_log_direct("[OK] Grab service initialized")
+            self._add_log_direct(f"[CONFIG] Check interval: {self.grab_service.check_interval}s")
+            self._add_log_direct(f"[CONFIG] Category ID: {self.grab_service.category_id}")
             self._add_log_direct("")
             
-            # 设置 Token 并启动
-            self._add_log_direct("[Step 2/2] Applying Token and Starting")
+            # Apply token and start
+            self._add_log_direct("[STEP 2/2] Applying Token and Starting")
             self._add_log_direct("-" * 50)
             
             self.grab_service.update_token({
@@ -699,11 +704,11 @@ class MainScreen(BoxLayout):
             
             self.grab_service.start()
             
-            self._add_log_direct("✅ Manual token applied")
-            self._add_log_direct("✅ Grab service started")
+            self._add_log_direct("[OK] Manual token applied")
+            self._add_log_direct("[OK] Grab service started")
             self._add_log_direct("")
             self._add_log_direct("=" * 50)
-            self._add_log_direct("🚀 Grab Order Service Running!")
+            self._add_log_direct("[RUNNING] Grab Order Service Active")
             self._add_log_direct("=" * 50)
             
             # 更新状态
@@ -721,12 +726,14 @@ class MainScreen(BoxLayout):
             self._on_start_success()
             
         except Exception as e:
-            log_print(f"❌ MANUAL TOKEN ERROR: {e}")
-            self._add_log_direct(f"ERROR: Failed to start with manual token: {e}")
+            error_msg = f"[ERROR] Failed to start: {str(e)}"
+            log_print(f"MANUAL TOKEN ERROR: {e}")
+            self._add_log_direct(error_msg)
             import traceback
             error_trace = traceback.format_exc()
             log_print(error_trace)
-            self._add_log_direct(error_trace[:500])
+            self._add_log_direct(error_trace[:300])
+            self._show_error_popup("Startup Failed", error_msg)
             self._on_start_failed()
     
     @mainthread
@@ -844,6 +851,40 @@ class MainScreen(BoxLayout):
     def update_ui(self, dt):
         """更新 UI（线程安全）"""
         self.log_display.text = self.log_text
+    
+    @mainthread
+    def _show_error_popup(self, title, message):
+        """显示错误弹窗（主线程）"""
+        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        
+        # Error message
+        error_label = Label(
+            text=message,
+            size_hint_y=0.7,
+            text_size=(400, None),
+            halign='left',
+            valign='top'
+        )
+        content.add_widget(error_label)
+        
+        # Close button
+        close_btn = Button(
+            text='Close',
+            size_hint_y=0.3,
+            background_color=(0.8, 0.3, 0.3, 1)
+        )
+        
+        popup = Popup(
+            title=title,
+            content=content,
+            size_hint=(0.8, 0.5),
+            auto_dismiss=True
+        )
+        
+        close_btn.bind(on_press=popup.dismiss)
+        content.add_widget(close_btn)
+        
+        popup.open()
 
 
 class FastGrabOrderApp(App):

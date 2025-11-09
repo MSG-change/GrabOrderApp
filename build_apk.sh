@@ -1,4 +1,27 @@
 #!/bin/bash
+# APK 打包脚本 - 自动设置环境变量
+
+# 设置 JDK 17
+export JAVA_HOME=$(/usr/libexec/java_home -v 17 2>/dev/null)
+if [ -z "$JAVA_HOME" ]; then
+    echo "❌ JDK 17 未安装，请运行: brew install openjdk@17"
+    exit 1
+fi
+
+# 设置 OpenSSL 3
+export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+
+echo "🔧 环境配置"
+echo "===================="
+echo "JAVA_HOME: $JAVA_HOME"
+echo "Java 版本: $($JAVA_HOME/bin/java -version 2>&1 | head -1)"
+echo "OpenSSL: $(brew --prefix openssl@3 2>/dev/null || echo '未安装')"
+echo "===================="
+echo ""
+
+#!/bin/bash
 # 打包 Android APK
 
 echo "======================================================================="
@@ -21,15 +44,21 @@ fi
 echo "📦 检查依赖..."
 echo ""
 
-# 清理旧文件
-if [ -d ".buildozer" ]; then
-    echo "🗑️  清理旧的构建文件..."
-    rm -rf .buildozer
-fi
-
-if [ -d "bin" ]; then
-    echo "🗑️  清理旧的APK..."
-    rm -rf bin
+# 询问是否清理（可选）
+read -p "是否清理旧的构建文件？(y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ -d ".buildozer" ]; then
+        echo "🗑️  清理旧的构建文件..."
+        rm -rf .buildozer
+    fi
+    
+    if [ -d "bin" ]; then
+        echo "🗑️  清理旧的APK..."
+        rm -rf bin
+    fi
+else
+    echo "⏭️  跳过清理，使用缓存加速构建"
 fi
 
 echo ""
