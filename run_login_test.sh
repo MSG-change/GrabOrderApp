@@ -24,8 +24,14 @@ else
 fi
 
 echo ""
-echo "Starting login test app..."
-echo ""
 
-# Run test app
-python3 test_login_ui.py
+# Check if Kivy is installed
+if python3 -c "import kivy" 2>/dev/null; then
+    echo "Starting login test app (UI version)..."
+    echo ""
+    python3 test_login_ui.py
+else
+    echo "Kivy not installed, using CLI version..."
+    echo ""
+    python3 test_login_cli.py
+fi
