@@ -3,27 +3,26 @@
 # Application name (English for Kivy compatibility)
 title = Grab Order Assistant
 
-# 包名
+# Package name
 package.name = graborder
 
-# 包域名
+# Package domain
 package.domain = com.graborder
 
-# 主程序入口
+# Main program entry
 source.dir = .
 source.entry_point = main.py
 source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*
 
-# 版本号
-version = 1.1.4
+# Version
+version = 1.2.0
 
-# 应用需求（Python 包）
-# 完全移除numpy依赖（使用纯Python + PIL + Java ONNX Runtime）
-# Android使用远程API生成W参数，不需要execjs
-# ✅ frida库用于Hook和动态分析（Android环境使用frida而不是frida-tools更轻量）
-# ARM64 Frida 支持 - 确保为目标架构编译
-# Note: For MuMu emulator, Frida may have architecture issues, using file-based fallback
+# Application requirements (Python packages)
+# Removed numpy dependency (using pure Python + PIL + Java ONNX Runtime)
+# Android uses remote API for W parameter generation, no execjs needed
+# Note: Frida removed from requirements to avoid architecture conflicts
+# The app will use external Frida server approach for MuMu emulator
 requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android
 
 # Frida ARM64 specific configuration
@@ -41,43 +40,43 @@ android.add_libs_armeabi_v7a = libs/armeabi-v7a/*.so
 p4a.hook = p4a_hook.py
 p4a.local_recipes =
 
-# 图标和启动画面
+# Icon and splash screen
 #icon.filename = %(source.dir)s/assets/icon.png
 #presplash.filename = %(source.dir)s/assets/presplash.png
 
-# Android 权限
+# Android permissions
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,SYSTEM_ALERT_WINDOW,FOREGROUND_SERVICE,BIND_VPN_SERVICE
 
-# Android API 版本
+# Android API version
 android.api = 31
 android.minapi = 21
 android.ndk = 25b
 
-# Android 架构
+# Android architecture (support ARM64 and ARMv7)
 android.archs = arm64-v8a,armeabi-v7a
 
-# 服务声明
+# Service declaration
 services = VpnService:src/vpn_service.py
 
-# 方向
+# Orientation
 orientation = portrait
 
-# 全屏
+# Full screen
 fullscreen = 0
 
-# 后台运行
+# Background running
 android.wakelock = True
 
-# 日志级别
+# Log level
 log_level = 2
 
-# 安装位置
+# Installation location
 android.install_location = auto
 
-# 自动接受SDK许可证
+# Automatically accept SDK license
 android.accept_sdk_license = True
 
-# 复制文件
+# Copy files
 android.add_src = libs,assets
 
 # Gradle 依赖 (添加ONNX Runtime Android AAR)
