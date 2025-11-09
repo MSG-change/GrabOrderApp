@@ -326,19 +326,19 @@ class MainScreen(BoxLayout):
         interval_box.add_widget(self.interval_spinner)
         config_panel.add_widget(interval_box)
         
-        # 商品类别
-        category_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
-        category_label = Label(
-            text='Category',
+        # Token 输入（新增）
+        token_box = BoxLayout(size_hint_y=0.33, spacing=10, padding=[15, 5])
+        token_label = Label(
+            text='Token',
             size_hint_x=0.35,
             font_size='13sp',
             color=(0.8, 0.8, 0.8, 1),
-
         )
-        category_box.add_widget(category_label)
+        token_box.add_widget(token_label)
         
-        self.category_input = TextInput(
-            text='2469',
+        self.token_input = TextInput(
+            text='',
+            hint_text='Paste token from HttpCanary',
             multiline=False,
             size_hint_x=0.65,
             font_size='12sp',
@@ -348,8 +348,8 @@ class MainScreen(BoxLayout):
             padding=[10, 8],
 
         )
-        category_box.add_widget(self.category_input)
-        config_panel.add_widget(category_box)
+        token_box.add_widget(self.token_input)
+        config_panel.add_widget(token_box)
         
         self.add_widget(config_panel)
         
@@ -436,7 +436,7 @@ class MainScreen(BoxLayout):
             ui_config = {
                 'target_package': self.package_input.text.strip() or self.target_package,
                 'interval_text': self.interval_spinner.text,
-                'category_id': self.category_input.text.strip() or '2469'
+                'manual_token': self.token_input.text.strip()  # 手动输入的 Token
             }
             
             # 在后台线程启动
@@ -454,6 +454,15 @@ class MainScreen(BoxLayout):
             
             # 使用 _add_log_direct 替代 add_log（避免 @mainthread 阻塞）
             
+            # 检查是否有手动输入的 Token
+            manual_token = ui_config.get('manual_token', '').strip()
+            
+            if manual_token:
+                # 使用手动 Token 模式 - 跳过 Frida 和 Hook
+                self._start_with_manual_token(ui_config, manual_token)
+                return
+            
+            # 自动模式 - 启动 Frida 和 Hook
             # 1. 启动 Frida Server
             self._add_log_direct("")
             self._add_log_direct("[Step 1/4] Starting Frida Server")
@@ -601,9 +610,10 @@ class MainScreen(BoxLayout):
             else:
                 self.grab_service.check_interval = 3
             
-            self.grab_service.category_id = ui_config['category_id']
+            # category_id 使用默认值
+            self.grab_service.category_id = '2469'
             
-            # 4. 等待 Token
+            # 4. 等待自动捕获 Token
             self._add_log_direct("")
             self._add_log_direct("[Step 4/4] Waiting for Token")
             self._add_log_direct("-" * 50)
@@ -615,6 +625,100 @@ class MainScreen(BoxLayout):
         except Exception as e:
             log_print(f"❌ BACKGROUND THREAD ERROR: {e}")
             self._add_log_direct(f"ERROR: Failed to start: {e}")
+            import traceback
+            error_trace = traceback.format_exc()
+            log_print(error_trace)
+            self._add_log_direct(error_trace[:500])
+            self._on_start_failed()
+    
+    def _start_with_manual_token(self, ui_config, manual_token):
+        """使用手动 Token 启动（跳过 Frida 和 Hook）"""
+        try:
+            self._add_log_direct("")
+            self._add_log_direct("=" * 50)
+            self._add_log_direct("🔑 Manual Token Mode")
+            self._add_log_direct("=" * 50)
+            self._add_log_direct("")
+            
+            # 移除 "Bearer " 前缀（如果有）
+            if manual_token.startswith("Bearer "):
+                manual_token = manual_token[7:]
+            
+            self._add_log_direct(f"Token: {manual_token[:30]}...")
+            self._add_log_direct("Skipping Frida and Hook services")
+            self._add_log_direct("")
+            
+            # 创建日志回调
+            def log_callback(msg):
+                self._add_log_direct(msg)
+            
+            # 初始化抢单服务
+            self._add_log_direct("[Step 1/2] Initializing Grab Service")
+            self._add_log_direct("-" * 50)
+            
+            if not GRAB_SERVICE_AVAILABLE:
+                self._add_log_direct("ERROR: Grab Service not available")
+                self._on_start_failed()
+                return
+            
+            self.grab_service = FastGrabOrderService(
+                api_base_url=self.api_base_url,
+                log_callback=log_callback
+            )
+            
+            # 设置检查间隔
+            interval_text = ui_config['interval_text']
+            if '0.5' in interval_text:
+                self.grab_service.check_interval = 0.5
+            elif '1' in interval_text:
+                self.grab_service.check_interval = 1
+            elif '2' in interval_text:
+                self.grab_service.check_interval = 2
+            else:
+                self.grab_service.check_interval = 3
+            
+            self.grab_service.category_id = '2469'
+            
+            self._add_log_direct("✅ Grab service initialized")
+            self._add_log_direct("")
+            
+            # 设置 Token 并启动
+            self._add_log_direct("[Step 2/2] Applying Token and Starting")
+            self._add_log_direct("-" * 50)
+            
+            self.grab_service.update_token(
+                token=manual_token,
+                club_id='236',
+                role_id='1329',
+                tenant_id='559'
+            )
+            
+            self.grab_service.start()
+            
+            self._add_log_direct("✅ Manual token applied")
+            self._add_log_direct("✅ Grab service started")
+            self._add_log_direct("")
+            self._add_log_direct("=" * 50)
+            self._add_log_direct("🚀 Grab Order Service Running!")
+            self._add_log_direct("=" * 50)
+            
+            # 更新状态
+            def update_status(dt):
+                self.frida_status = "Skipped"
+                self.frida_card.set_value("Skipped", (0.5, 0.5, 0.5, 1))
+                self.hook_status = "Skipped"
+                self.hook_card.set_value("Skipped", (0.5, 0.5, 0.5, 1))
+                self.token_status = "Manual"
+                self.token_card.set_value("Manual", (0.2, 0.7, 0.3, 1))
+                self.grab_status = "Running"
+                self.grab_card.set_value("Running", (0.2, 0.7, 0.3, 1))
+            Clock.schedule_once(update_status, 0)
+            
+            self._on_start_success()
+            
+        except Exception as e:
+            log_print(f"❌ MANUAL TOKEN ERROR: {e}")
+            self._add_log_direct(f"ERROR: Failed to start with manual token: {e}")
             import traceback
             error_trace = traceback.format_exc()
             log_print(error_trace)
