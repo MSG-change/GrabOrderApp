@@ -303,13 +303,25 @@ class FastGrabOrderService:
                     orders = order_list.get('list', [])
                     if orders:
                         self.log(f"[DEBUG] Found {len(orders)} orders in data.list")
-                        # 打印第一个订单的键，用于调试
+                        # 打印第一个订单的所有键和部分值，用于调试
                         if orders and len(orders) > 0:
-                            self.log(f"[DEBUG] Order keys: {list(orders[0].keys())[:5]}...")
+                            first_order = orders[0]
+                            self.log(f"[DEBUG] Order keys: {list(first_order.keys())}")
+                            # 打印重要字段
+                            for key in ['id', 'orderId', 'orderNo', 'status', 'productName']:
+                                if key in first_order:
+                                    self.log(f"[DEBUG]   {key}: {first_order[key]}")
                     return orders
                 elif isinstance(order_list, list):
                     if order_list:
                         self.log(f"[DEBUG] Found {len(order_list)} orders in data (list)")
+                        if order_list and len(order_list) > 0:
+                            first_order = order_list[0]
+                            self.log(f"[DEBUG] Order keys: {list(first_order.keys())}")
+                            # 打印重要字段
+                            for key in ['id', 'orderId', 'orderNo', 'status', 'productName']:
+                                if key in first_order:
+                                    self.log(f"[DEBUG]   {key}: {first_order[key]}")
                     return order_list
                 else:
                     self.log(f"[DEBUG] Unexpected data structure: {type(order_list)}")
@@ -419,7 +431,13 @@ class FastGrabOrderService:
             self.log(f"[GRAB] Attempting to grab order: {order_id}")
             self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms, Prep: {prep_time:.1f}ms")
             self.log(f"  [REQUEST] POST {url}")
-            self.log(f"  [DATA] orderId={order_id}, geeDto={{}}")
+            self.log(f"  [DATA] orderId={order_id_int} (type: {type(order_id_int).__name__}), geeDto={{}}")
+            
+            # 打印订单的其他关键字段，可能有用
+            if 'orderNo' in order:
+                self.log(f"  [DEBUG] orderNo: {order.get('orderNo')}")
+            if 'status' in order:
+                self.log(f"  [DEBUG] status: {order.get('status')}")
             
             # 步骤3：发送请求
             t3 = time.time()
@@ -466,9 +484,13 @@ class FastGrabOrderService:
                 msg = result.get('msg', 'Unknown')
                 code = result.get('code', 'N/A')
                 self.log(f"  [FAILED] Order {order_id}: Code {code} - {msg}")
-                # 如果是"订单已被抢"或"订单不存在"才缓存，其他错误不缓存（可能需要重试）
-                if code in [500, 404, 400]:  # 根据实际错误码调整
+                # Code 500 "订单不存在" - 可能是订单已被抢或ID格式错误
+                # 不缓存500错误，因为可能是ID问题而不是订单真的不存在
+                if code in [404, 400]:  # 只缓存明确的失败
                     self.order_cache[order_id] = time.time()
+                elif code == 500:
+                    # 500错误可能是ID格式问题，不缓存，下次重试
+                    self.log(f"  [DEBUG] Code 500 - not caching, might be ID format issue")
                 return False
         
         except Exception as e:
@@ -606,9 +628,22 @@ class FastGrabOrderService:
     def _get_order_id(self, order):
         """获取订单 ID"""
         # 尝试多种可能的字段名
-        order_id = order.get('id') or order.get('orderId') or order.get('order_id') or order.get('orderNo')
+        # 注意：可能需要 orderNo 而不是 id
+        order_id = None
+        
+        # 按优先级尝试不同字段
+        for field in ['orderNo', 'orderId', 'id', 'order_id']:
+            if field in order and order[field]:
+                order_id = order[field]
+                self.log(f"  [ORDER_ID] Using field '{field}' = {order_id}")
+                break
+        
         if not order_id:
             self.log(f"[WARNING] Cannot find order ID in order data: {list(order.keys())}")
+            # 打印前5个字段的值以便调试
+            for key in list(order.keys())[:5]:
+                self.log(f"    {key}: {order.get(key)}")
+        
         return order_id
     
     def _print_stats(self):
