@@ -42,7 +42,6 @@ from kivy.properties import StringProperty, BooleanProperty, NumericProperty
 from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle, Rectangle
 from kivy.uix.widget import Widget
-from kivy.uix.popup import Popup
 
 # 导入业务逻辑
 sys.path.insert(0, os.path.dirname(__file__))
@@ -662,9 +661,8 @@ class MainScreen(BoxLayout):
             self._add_log_direct("-" * 50)
             
             if not GRAB_SERVICE_AVAILABLE:
-                error_msg = "[ERROR] Grab Service not available"
-                self._add_log_direct(error_msg)
-                self._show_error_popup("Service Error", error_msg)
+                self._add_log_direct("[ERROR] Grab Service not available")
+                self._add_log_direct("[ERROR] Please check installation")
                 self._on_start_failed()
                 return
             
@@ -726,14 +724,16 @@ class MainScreen(BoxLayout):
             self._on_start_success()
             
         except Exception as e:
-            error_msg = f"[ERROR] Failed to start: {str(e)}"
             log_print(f"MANUAL TOKEN ERROR: {e}")
-            self._add_log_direct(error_msg)
+            self._add_log_direct(f"[ERROR] Failed to start: {str(e)}")
             import traceback
             error_trace = traceback.format_exc()
             log_print(error_trace)
-            self._add_log_direct(error_trace[:300])
-            self._show_error_popup("Startup Failed", error_msg)
+            # Show first 3 lines of traceback
+            trace_lines = error_trace.split('\n')[:3]
+            for line in trace_lines:
+                if line.strip():
+                    self._add_log_direct(f"  {line.strip()}")
             self._on_start_failed()
     
     @mainthread
@@ -851,40 +851,6 @@ class MainScreen(BoxLayout):
     def update_ui(self, dt):
         """更新 UI（线程安全）"""
         self.log_display.text = self.log_text
-    
-    @mainthread
-    def _show_error_popup(self, title, message):
-        """显示错误弹窗（主线程）"""
-        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        
-        # Error message
-        error_label = Label(
-            text=message,
-            size_hint_y=0.7,
-            text_size=(400, None),
-            halign='left',
-            valign='top'
-        )
-        content.add_widget(error_label)
-        
-        # Close button
-        close_btn = Button(
-            text='Close',
-            size_hint_y=0.3,
-            background_color=(0.8, 0.3, 0.3, 1)
-        )
-        
-        popup = Popup(
-            title=title,
-            content=content,
-            size_hint=(0.8, 0.5),
-            auto_dismiss=True
-        )
-        
-        close_btn.bind(on_press=popup.dismiss)
-        content.add_widget(close_btn)
-        
-        popup.open()
 
 
 class FastGrabOrderApp(App):
