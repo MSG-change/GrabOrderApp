@@ -49,12 +49,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 # Smart Frida service with intelligent environment detection
 SMART_FRIDA_AVAILABLE = False
 SmartFridaServiceClass = None
+FRIDA_MANAGER_AVAILABLE = False
+FridaServiceClass = None
 
 try:
     from src.smart_frida_service import SmartFridaService
     SmartFridaServiceClass = SmartFridaService
     SMART_FRIDA_AVAILABLE = True
-    FRIDA_MANAGER_AVAILABLE = True  # 添加这行
+    FRIDA_MANAGER_AVAILABLE = True
     log_print("✅ SmartFridaService imported successfully")
     log_print("ℹ️ Intelligent environment detection and service selection enabled")
 except Exception as e:
