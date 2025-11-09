@@ -167,19 +167,19 @@ class FastGrabOrderService:
         """启动抢单服务"""
         if self.running:
             self.log("[WARNING] Service already running")
-            return False
+            return
         
-        if not self.token:
-            self.log("[ERROR] Token not configured")
-            return False
+        # 清空缓存，确保新启动时没有旧缓存
+        self.order_cache.clear()
+        self.log("[CACHE] Cleared order cache on startup")
         
         self.running = True
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
         
         self.log("[STARTED] Grab service is running")
-        self.log(f"[INFO] Checking every {self.check_interval}s")
-        self.log(f"[INFO] Target category: {self.category_id}")
+        self.log(f"  Check interval: {self.check_interval}s")
+        self.log(f"  Category ID: {self.category_id}")
         return True
     
     def stop(self):
@@ -215,8 +215,13 @@ class FastGrabOrderService:
                     self.stats['orders_found'] += len(orders)
                     self.log(f"[FOUND] {len(orders)} order(s) available")
                     
+                    # 添加缓存状态日志
+                    if self.order_cache:
+                        self.log(f"  [CACHE] {len(self.order_cache)} orders in cache: {list(self.order_cache.keys())[:3]}...")
+                    
                     # Filter processed orders
                     new_orders = self._filter_new_orders(orders)
+                    self.log(f"  [FILTER] {len(new_orders)} new orders after filtering")
                     
                     if new_orders:
                         # Log order details
@@ -232,6 +237,14 @@ class FastGrabOrderService:
                         self._grab_orders_concurrent(new_orders)
                     else:
                         self.log("  (All orders already processed)")
+                        # 调试：显示被过滤的订单
+                        if orders:
+                            for order in orders[:1]:  # 只显示第一个
+                                order_id = self._get_order_id(order)
+                                if order_id in self.order_cache:
+                                    self.log(f"    [DEBUG] Order {order_id} was filtered (in cache)")
+                                else:
+                                    self.log(f"    [DEBUG] Order {order_id} was filtered (unknown reason)")
                     
                     consecutive_errors = 0
                 else:
@@ -351,32 +364,43 @@ class FastGrabOrderService:
     
     def _grab_orders_concurrent(self, orders):
         """并发抢单（提高速度）"""
+        start_time = time.time()
+        
         # 只抢前3个订单（避免过载）
         orders_to_grab = orders[:3]
+        self.log(f"[GRAB] Starting concurrent grab for {len(orders_to_grab)} orders")
         
         futures = []
-        for order in orders_to_grab:
+        for idx, order in enumerate(orders_to_grab):
+            self.log(f"  [THREAD-{idx}] Submitting order to thread pool")
             future = self.executor.submit(self._grab_order_fast, order)
             futures.append(future)
         
         # 等待所有请求完成
-        for future in futures:
+        for idx, future in enumerate(futures):
             try:
-                future.result(timeout=10)
+                result = future.result(timeout=10)
+                self.log(f"  [THREAD-{idx}] Completed with result: {result}")
             except Exception as e:
-                self.log(f"[ERROR] Thread exception: {str(e)}")
+                self.log(f"  [THREAD-{idx}] Exception: {str(e)}")
+        
+        total_time = (time.time() - start_time) * 1000
+        self.log(f"[GRAB] All concurrent grabs completed in {total_time:.1f}ms")
     
     def _grab_order_fast(self, order):
         """快速抢单（单个订单）"""
+        total_start = time.time()
         try:
+            # 步骤1：提取订单ID
+            t1 = time.time()
             order_id = self._get_order_id(order)
             if not order_id:
+                self.log(f"[ERROR] Failed to get order ID from order: {order}")
                 return False
+            id_time = (time.time() - t1) * 1000  # 转换为毫秒
             
-            start_time = time.time()
-            
-            # 直接抢单（跳过 Geetest 验证以提高速度）
-            # 如果需要验证，会返回验证要求
+            # 步骤2：准备请求数据
+            t2 = time.time()
             url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
             
             # Convert order_id to int
@@ -390,31 +414,41 @@ class FastGrabOrderService:
                 "orderId": order_id_int,
                 "geeDto": {}  # 空的 geeDto，让服务器决定是否需要验证
             }
+            prep_time = (time.time() - t2) * 1000
             
             self.log(f"[GRAB] Attempting to grab order: {order_id}")
-            self.log(f"[REQUEST] POST {url}")
-            self.log(f"[DATA] orderId={order_id}, geeDto={{}}")
+            self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms, Prep: {prep_time:.1f}ms")
+            self.log(f"  [REQUEST] POST {url}")
+            self.log(f"  [DATA] orderId={order_id}, geeDto={{}}")
             
+            # 步骤3：发送请求
+            t3 = time.time()
             response = self.session.post(url, json=data)
+            request_time = (time.time() - t3) * 1000
             
             # Log response
-            self.log(f"[RESPONSE] Status: {response.status_code}")
+            self.log(f"  [RESPONSE] Status: {response.status_code} (took {request_time:.1f}ms)")
             
             # Log response for debugging
             if response.status_code != 200:
                 self.log(f"  [DEBUG] HTTP {response.status_code}: {response.text[:100]}")
             
+            # 步骤4：解析响应
+            t4 = time.time()
             result = response.json()
-            self.log(f"  [RESPONSE] Code: {result.get('code')}, Msg: {result.get('msg', 'N/A')}")
+            parse_time = (time.time() - t4) * 1000
             
-            grab_time = time.time() - start_time
+            total_time = (time.time() - total_start) * 1000
+            self.log(f"  [RESPONSE] Code: {result.get('code')}, Msg: {result.get('msg', 'N/A')}")
+            self.log(f"  [TIMING] Request: {request_time:.1f}ms, Parse: {parse_time:.1f}ms, Total: {total_time:.1f}ms")
+            
             self.stats['grab_attempts'] += 1
-            self.stats['avg_grab_time'].append(grab_time)
+            self.stats['avg_grab_time'].append(total_time / 1000)  # 存储秒数
             
             # API 返回 code=0 或 code=200 都表示成功
             if result.get('code') in [0, 200]:
                 self.stats['grab_success'] += 1
-                self.log(f"  [SUCCESS] Order {order_id} grabbed in {grab_time:.2f}s")
+                self.log(f"  [SUCCESS] Order {order_id} grabbed in {total_time:.1f}ms")
                 # 抢单成功后才缓存
                 self.order_cache[order_id] = time.time()
                 return True
@@ -609,4 +643,3 @@ class FastGrabOrderService:
         else:
             timestamp = datetime.now().strftime("%H:%M:%S")
             print(f"[{timestamp}] {message}")
-
