@@ -1,20 +1,20 @@
-# Buildozer 构建缓存
+# Buildozer build cache
 .buildozer/
 bin/
 
-# 大文件（APK构建时会包含）
+# Large files (will be included in APK build)
 assets/best_siamese_model.pth
 assets/**/*.pth
 assets/jiyanv4/node_modules/
 
-# Python 缓存
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 
-# 虚拟环境
+# Virtual environment
 venv/
 ENV/
 env/
@@ -29,9 +29,9 @@ env/
 # macOS
 .DS_Store
 
-# 日志
+# Logs
 *.log
 
-# 临时文件
+# Temporary files
 *.tmp
 *.bak
