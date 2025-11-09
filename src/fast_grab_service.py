@@ -400,7 +400,10 @@ class FastGrabOrderService:
         self.log(f"[GRAB] All concurrent grabs completed in {total_time:.1f}ms")
     
     def _grab_order_fast(self, order):
-        """快速抢单（单个订单）"""
+        """
+        快速抢单（单个订单）
+        直接进行Geetest验证，不先尝试空geeDto
+        """
         total_start = time.time()
         try:
             # 步骤1：提取订单ID
@@ -409,85 +412,38 @@ class FastGrabOrderService:
             if not order_id:
                 self.log(f"[ERROR] Failed to get order ID from order: {order}")
                 return False
-            id_time = (time.time() - t1) * 1000  # 转换为毫秒
+            id_time = (time.time() - t1) * 1000
             
-            # 步骤2：准备请求数据
-            t2 = time.time()
-            url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
-            
-            # 确保 order_id 是字符串格式（API需要字符串，不是整数！）
             order_id_str = str(order_id)
             
-            # 包含空的 geeDto 结构（即使不需要验证也要发送）
-            data = {
-                "orderId": order_id_str,  # 使用字符串格式
-                "geeDto": {}  # 空的 geeDto，让服务器决定是否需要验证
-            }
-            prep_time = (time.time() - t2) * 1000
-            
             self.log(f"[GRAB] Attempting to grab order: {order_id}")
-            self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms, Prep: {prep_time:.1f}ms")
-            self.log(f"  [REQUEST] POST {url}")
-            self.log(f"  [DATA] orderId='{order_id_str}' (type: {type(order_id_str).__name__}), geeDto={{}}")
+            self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms")
             
-            # 打印订单的其他关键字段，可能有用
+            # 打印订单的其他关键字段
             if 'orderNo' in order:
                 self.log(f"  [DEBUG] orderNo: {order.get('orderNo')}")
             if 'status' in order:
                 self.log(f"  [DEBUG] status: {order.get('status')}")
             
-            # 步骤3：发送请求
-            t3 = time.time()
-            response = self.session.post(url, json=data)
-            request_time = (time.time() - t3) * 1000
-            
-            # Log response
-            self.log(f"  [RESPONSE] Status: {response.status_code} (took {request_time:.1f}ms)")
-            
-            # Log response for debugging
-            if response.status_code != 200:
-                self.log(f"  [DEBUG] HTTP {response.status_code}: {response.text[:100]}")
-            
-            # 步骤4：解析响应
-            t4 = time.time()
-            result = response.json()
-            parse_time = (time.time() - t4) * 1000
+            # ============================================================
+            # 直接进行Geetest验证（不先尝试空geeDto）
+            # ============================================================
+            self.log(f"  [GEETEST] 开始九宫格验证...")
+            success = self._grab_with_geetest(order_id_str)
             
             total_time = (time.time() - total_start) * 1000
-            self.log(f"  [RESPONSE] Code: {result.get('code')}, Msg: {result.get('msg', 'N/A')}")
-            self.log(f"  [TIMING] Request: {request_time:.1f}ms, Parse: {parse_time:.1f}ms, Total: {total_time:.1f}ms")
             
-            self.stats['grab_attempts'] += 1
-            self.stats['avg_grab_time'].append(total_time / 1000)  # 存储秒数
-            
-            # API 返回 code=0 或 code=200 都表示成功
-            if result.get('code') in [0, 200]:
+            if success:
                 self.stats['grab_success'] += 1
+                self.stats['grab_attempts'] += 1
+                self.stats['avg_grab_time'].append(total_time / 1000)
                 self.log(f"  [SUCCESS] Order {order_id} grabbed in {total_time:.1f}ms")
-                # 抢单成功后才缓存
                 self.order_cache[order_id] = time.time()
                 return True
-            
-            elif result.get('code') == 1001:
-                # Needs Geetest verification
-                self.log(f"  [CAPTCHA] Order {order_id} requires verification")
-                success = self._grab_with_geetest(order_id_str)  # 传递字符串
-                if success:
-                    self.stats['grab_success'] += 1
-                    return True
-            
             else:
                 self.stats['grab_failed'] += 1
-                msg = result.get('msg', 'Unknown')
-                code = result.get('code', 'N/A')
-                self.log(f"  [FAILED] Order {order_id}: Code {code} - {msg}")
-                # Code 500 "订单不存在" - 可能是订单已被抢或ID格式错误
-                # 不缓存500错误，因为可能是ID问题而不是订单真的不存在
-                if code in [404, 400]:  # 只缓存明确的失败
-                    self.order_cache[order_id] = time.time()
-                elif code == 500:
-                    # 500错误可能是ID格式问题，不缓存，下次重试
-                    self.log(f"  [DEBUG] Code 500 - not caching, might be ID format issue")
+                self.stats['grab_attempts'] += 1
+                self.log(f"  [FAILED] Order {order_id} failed in {total_time:.1f}ms")
                 return False
         
         except Exception as e:
@@ -496,52 +452,41 @@ class FastGrabOrderService:
             return False
     
     def _grab_with_geetest(self, order_id):
-        """带 Geetest 验证的抢单"""
+        """
+        带 Geetest 验证的抢单
+        流程：Load → 识别 → Verify → 抢单
+        """
         try:
             # 延迟初始化 Geetest（避免启动慢）
             if not self._geetest_initialized:
                 self._init_geetest()
             
-            if not self.geetest_helper or not self.w_generator:
-                self.log("  [WARNING] Geetest solver not available")
+            if not self.geetest_helper:
+                self.log("  [WARNING] Geetest helper not available")
                 return False
             
-            # 执行 Geetest 验证
-            geetest_data = self.geetest_helper.load_geetest()
-            if not geetest_data:
+            # ============================================================
+            # 步骤1-3: 执行完整的Geetest验证
+            # Load → 识别 → 生成W → Verify
+            # ============================================================
+            self.log(f"  [GEETEST] 执行验证流程...")
+            
+            # 生成challenge（基于订单ID）
+            challenge = self.geetest_helper.generate_challenge(str(order_id))
+            
+            # 调用verify方法（包含Load、识别、W生成、Verify）
+            geetest_result = self.geetest_helper.verify(challenge=challenge)
+            
+            if not geetest_result or not geetest_result.get('success'):
+                self.log(f"  [GEETEST] ❌ 验证失败")
                 return False
             
-            lot_number = geetest_data.get('lot_number')
-            question_url = f"http://static.geetest.com/{geetest_data['ques'][0]}"
-            grid_url = f"http://static.geetest.com/{geetest_data['imgs']}"
+            self.log(f"  [GEETEST] ✅ 验证成功")
+            self.log(f"  [GEETEST] 识别答案: {geetest_result.get('answers', [])}")
             
-            pic_indices = self.geetest_helper.recognize_images(question_url, grid_url)
-            if not pic_indices:
-                return False
-            
-            pic_index_str = ','.join(map(str, pic_indices))
-            w_param = self.w_generator.generate_w(
-                lot_number=lot_number,
-                captcha_id=self.geetest_helper.captcha_id,
-                pic_index=pic_index_str,
-                **geetest_data['pow_detail']
-            )
-            
-            if not w_param:
-                return False
-            
-            # Get verification result
-            geetest_result = self.geetest_helper.verify_geetest(
-                lot_number=lot_number,
-                captcha_output=w_param,
-                pass_token=geetest_data['process_token'],
-                gen_time=int(time.time())
-            )
-            
-            if not geetest_result:
-                return False
-            
-            # Build nested geeDto structure (matching working script)
+            # ============================================================
+            # 步骤4: 构建geeDto
+            # ============================================================
             gee_dto = {
                 'lotNumber': geetest_result.get('lot_number'),
                 'captchaOutput': geetest_result.get('captcha_output'),
@@ -551,19 +496,23 @@ class FastGrabOrderService:
                 'captchaKeyType': 'dlVerify'
             }
             
-            # Remove None values
+            # 移除None值
             gee_dto = {k: v for k, v in gee_dto.items() if v is not None}
             
-            # 确保 order_id 是字符串
-            order_id_str = str(order_id)
+            # 验证必需的参数
+            if not gee_dto.get('lotNumber') or not gee_dto.get('captchaOutput') or not gee_dto.get('passToken'):
+                self.log(f"  [GEETEST] ❌ 参数不完整")
+                return False
             
-            # Build payload with nested structure
+            # ============================================================
+            # 步骤5: 发送抢单请求（带geeDto）
+            # ============================================================
+            order_id_str = str(order_id)
             payload = {
-                'orderId': order_id_str,  # 使用字符串
+                'orderId': order_id_str,
                 'geeDto': gee_dto
             }
             
-            # Send grab request with Geetest params
             url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
             
             self.log(f"  [REQUEST] POST grabAnOrder/v1 with geeDto")
@@ -573,13 +522,11 @@ class FastGrabOrderService:
             result = response.json()
             
             if result.get('code') == 200 or result.get('code') == 0:
-                self.log(f"  [SUCCESS] Captcha solved, order grabbed!")
-                # 验证码抢单成功后也要缓存
+                self.log(f"  [SUCCESS] ✅ 抢单成功！")
                 self.order_cache[order_id] = time.time()
                 return True
             else:
-                self.log(f"  [FAILED] Captcha solved but grab failed: {result.get('msg')}")
-                # 验证码失败根据错误码决定是否缓存
+                self.log(f"  [FAILED] ❌ 抢单失败: {result.get('msg')}")
                 if result.get('code') in [500, 404, 400]:
                     self.order_cache[order_id] = time.time()
                 return False
