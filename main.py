@@ -201,6 +201,7 @@ class MainScreen(BoxLayout):
         
         # 日志缓冲
         self.log_buffer = []
+        self.log_text = ''  # 初始化 log_text
         self.max_logs = 150
         
         # 服务
@@ -505,10 +506,13 @@ class MainScreen(BoxLayout):
             font_size='11sp',
             color=(0.85, 0.85, 0.85, 1),
             padding=[10, 10],
-
+            markup=True  # 支持标记语言
         )
-        self.log_display.bind(texture_size=self.log_display.setter('size'))
-        self.log_display.bind(size=self.log_display.setter('text_size'))
+        # 正确设置Label的高度随内容增长，宽度固定
+        self.log_display.bind(
+            width=lambda *x: setattr(self.log_display, 'text_size', (self.log_display.width - 20, None)),
+            texture_size=lambda *x: setattr(self.log_display, 'height', self.log_display.texture_size[1] + 20)
+        )
         scroll.add_widget(self.log_display)
         log_container.add_widget(scroll)
         
