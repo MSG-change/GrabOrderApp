@@ -415,15 +415,12 @@ class FastGrabOrderService:
             t2 = time.time()
             url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
             
-            # Convert order_id to int
-            try:
-                order_id_int = int(order_id)
-            except:
-                order_id_int = order_id
+            # 确保 order_id 是字符串格式（API需要字符串，不是整数！）
+            order_id_str = str(order_id)
             
             # 包含空的 geeDto 结构（即使不需要验证也要发送）
             data = {
-                "orderId": order_id_int,
+                "orderId": order_id_str,  # 使用字符串格式
                 "geeDto": {}  # 空的 geeDto，让服务器决定是否需要验证
             }
             prep_time = (time.time() - t2) * 1000
@@ -431,7 +428,7 @@ class FastGrabOrderService:
             self.log(f"[GRAB] Attempting to grab order: {order_id}")
             self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms, Prep: {prep_time:.1f}ms")
             self.log(f"  [REQUEST] POST {url}")
-            self.log(f"  [DATA] orderId={order_id_int} (type: {type(order_id_int).__name__}), geeDto={{}}")
+            self.log(f"  [DATA] orderId='{order_id_str}' (type: {type(order_id_str).__name__}), geeDto={{}}")
             
             # 打印订单的其他关键字段，可能有用
             if 'orderNo' in order:
@@ -474,7 +471,7 @@ class FastGrabOrderService:
             elif result.get('code') == 1001:
                 # Needs Geetest verification
                 self.log(f"  [CAPTCHA] Order {order_id} requires verification")
-                success = self._grab_with_geetest(order_id_int)
+                success = self._grab_with_geetest(order_id_str)  # 传递字符串
                 if success:
                     self.stats['grab_success'] += 1
                     return True
@@ -557,15 +554,12 @@ class FastGrabOrderService:
             # Remove None values
             gee_dto = {k: v for k, v in gee_dto.items() if v is not None}
             
-            # Convert order_id to int
-            try:
-                order_id_int = int(order_id)
-            except:
-                order_id_int = order_id
+            # 确保 order_id 是字符串
+            order_id_str = str(order_id)
             
             # Build payload with nested structure
             payload = {
-                'orderId': order_id_int,
+                'orderId': order_id_str,  # 使用字符串
                 'geeDto': gee_dto
             }
             
