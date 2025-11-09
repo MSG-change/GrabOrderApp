@@ -1,0 +1,110 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install buildozer cython virtualenv
+        pip install kivy pillow requests
+    
+    - name: Download model from Release
+      run: |
+        echo "📥 Downloading model file from GitHub Release..."
+        
+        # 配置
+        VERSION="v1.7.2"
+        MODEL_FILE="best_siamese_model.pth"
+        DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${MODEL_FILE}"
+        
+        # 下载模型文件
+        if [ ! -f "${MODEL_FILE}" ]; then
+          echo "Downloading from: ${DOWNLOAD_URL}"
+          
+          # 使用curl下载（支持重定向）
+          curl -L -o "${MODEL_FILE}" "${DOWNLOAD_URL}" || {
+            echo "❌ Failed to download from release"
+            echo "Trying to download using Python script..."
+            python download_model.py || {
+              echo "❌ Python script also failed"
+              echo "⚠️  Building without model file (app may not work properly)"
+            }
+          }
+          
+          # 验证文件
+          if [ -f "${MODEL_FILE}" ]; then
+            FILE_SIZE=$(stat -c%s "${MODEL_FILE}" 2>/dev/null || stat -f%z "${MODEL_FILE}" 2>/dev/null || echo "0")
+            echo "✅ Model downloaded: ${FILE_SIZE} bytes"
+          else
+            echo "⚠️  Model file not found, continuing anyway..."
+          fi
+        else
+          echo "✅ Model file already exists"
+        fi
+    
+    - name: Build with Buildozer
+      run: |
+        # 初始化buildozer（如果需要）
+        buildozer init || true
+        
+        # 清理之前的构建
+        buildozer android clean || true
+        
+        # 构建APK
+        buildozer android debug || {
+          echo "⚠️  Build failed, check logs"
+          exit 1
+        }
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: GrabOrderApp-APK
+        path: bin/*.apk
+        
+    - name: Create Release (if tagged)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          bin/*.apk
+        body: |
+          ## 📱 GrabOrderApp ${{ github.ref_name }}
+          
+          ### 🚀 Features
+          - Nine-grid verification system
+          - Automatic order grabbing
+          - Real-time logging
+          
+          ### 📥 Installation
+          1. Download the APK file
+          2. Enable "Unknown Sources" in Android settings
+          3. Install the APK
+          
+          ### ⚠️ Important
+          This APK requires the Siamese model for nine-grid verification.
+          The model is automatically included during build.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
