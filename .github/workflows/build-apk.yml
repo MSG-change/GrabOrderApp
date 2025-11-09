@@ -31,8 +31,7 @@ jobs:
         export BUILDOZER_WARN_ON_ROOT=0
         export CI=true
         
-        # Clean and build APK
-        buildozer android clean
+        # Build APK directly (clean is not needed after cache removal)
         buildozer -v android debug
       env:
         BUILDOZER_WARN_ON_ROOT: 0

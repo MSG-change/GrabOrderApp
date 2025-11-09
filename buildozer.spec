@@ -16,7 +16,7 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*
 
 # Version
-version = 1.2.2
+version = 1.2.4
 
 # Application requirements (Python packages)
 # Removed numpy dependency (using pure Python + PIL + Java ONNX Runtime)
@@ -33,8 +33,8 @@ android.add_grant_uri_permissions = True
 # Ensure Frida is properly included
 android.add_jars =
 android.add_aars =
-android.add_libs_aarch64 = libs/arm64-v8a/*.so
-android.add_libs_armeabi_v7a = libs/armeabi-v7a/*.so
+# android.add_libs_aarch64 = libs/arm64-v8a/*.so
+# android.add_libs_armeabi_v7a = libs/armeabi-v7a/*.so
 
 # Frida specific build flags
 # p4a.hook = p4a_hook.py (disabled to avoid path issues)
