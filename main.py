@@ -46,13 +46,44 @@ from kivy.uix.widget import Widget
 # 导入业务逻辑
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Smart Frida service with intelligent environment detection
+SMART_FRIDA_AVAILABLE = False
+SmartFridaServiceClass = None
+
 try:
-    from src.frida_manager import FridaManager
-    FRIDA_MANAGER_AVAILABLE = True
-    log_print("✅ FridaManager imported successfully")
+    from src.smart_frida_service import SmartFridaService
+    SmartFridaServiceClass = SmartFridaService
+    SMART_FRIDA_AVAILABLE = True
+    log_print("✅ SmartFridaService imported successfully")
+    log_print("ℹ️ Intelligent environment detection and service selection enabled")
 except Exception as e:
-    log_print(f"❌ Frida Manager import failed: {e}")
+    log_print(f"⚠️ Smart Frida Service import failed: {e}")
+    # Fallback to manual service selection
     FRIDA_MANAGER_AVAILABLE = False
+    FridaServiceClass = None
+
+    try:
+        from src.frida_apk_service import FridaAPKService
+        FridaServiceClass = FridaAPKService
+        FRIDA_MANAGER_AVAILABLE = True
+        log_print("✅ FridaAPKService imported successfully (fallback)")
+    except Exception as e2:
+        log_print(f"⚠️ Frida APK Service import failed: {e2}")
+        try:
+            from src.frida_manager import FridaManager
+            FridaServiceClass = FridaManager
+            FRIDA_MANAGER_AVAILABLE = True
+            log_print("✅ FridaManager (legacy) imported successfully (fallback)")
+        except Exception as e3:
+            log_print(f"⚠️ Frida Manager (legacy) import failed: {e3}")
+            try:
+                from src.frida_service import FridaTokenServiceSimple
+                FridaServiceClass = FridaTokenServiceSimple
+                FRIDA_MANAGER_AVAILABLE = True
+                log_print("✅ FridaTokenServiceSimple imported successfully (file-based fallback)")
+            except Exception as e4:
+                log_print(f"❌ All Frida services failed: {e4}")
+                FRIDA_MANAGER_AVAILABLE = False
 
 try:
     from src.auto_hook_service import AutoHookService
@@ -436,11 +467,76 @@ class MainScreen(BoxLayout):
             # 创建一个wrapper，让FridaManager使用非阻塞日志
             def log_callback(msg):
                 self._add_log_direct(msg)
-            
-            self.frida_manager = FridaManager(log_callback=log_callback)
-            
-            if not self.frida_manager.start_frida_server():
-                self._add_log_direct("ERROR: Failed to start Frida Server")
+
+            # 优先使用智能 Frida 服务
+            if SMART_FRIDA_AVAILABLE and SmartFridaServiceClass:
+                try:
+                    self.frida_manager = SmartFridaServiceClass(
+                        target_package=self.target_package,
+                        log_callback=log_callback
+                    )
+                    self._add_log_direct("🔧 Using Smart Frida Service with environment detection")
+
+                    # 启动智能服务
+                    if not self.frida_manager.start():
+                        self._add_log_direct("ERROR: Smart Frida service failed to start")
+                        # 尝试诊断问题
+                        diagnosis = self.frida_manager.diagnose_issues()
+                        for issue in diagnosis['issues']:
+                            self._add_log_direct(f"DIAGNOSIS: {issue}")
+                        for rec in diagnosis['recommendations']:
+                            self._add_log_direct(f"SOLUTION: {rec}")
+                        self._on_start_failed()
+                        return
+
+                    self._add_log_direct("✅ Smart Frida service started successfully")
+
+                except Exception as e:
+                    self._add_log_direct(f"ERROR: Smart Frida service initialization failed: {e}")
+                    self._add_log_direct("Falling back to manual service selection...")
+                    SMART_FRIDA_AVAILABLE = False
+
+            # 降级到手动服务选择
+            if not SMART_FRIDA_AVAILABLE and FRIDA_MANAGER_AVAILABLE and FridaServiceClass:
+                try:
+                    if FridaServiceClass.__name__ == 'FridaAPKService':
+                        self.frida_manager = FridaServiceClass(
+                            target_package=self.target_package,
+                            log_callback=log_callback
+                        )
+                        self._add_log_direct("Using pure APK Frida service (fallback)")
+                    elif FridaServiceClass.__name__ == 'FridaManager':
+                        self.frida_manager = FridaServiceClass(log_callback=log_callback)
+                        self._add_log_direct("Using legacy Frida manager (fallback)")
+                    elif FridaServiceClass.__name__ == 'FridaTokenServiceSimple':
+                        self.frida_manager = FridaServiceClass(log_callback=log_callback)
+                        self._add_log_direct("Using file-based token monitoring (no Frida, fallback)")
+                    else:
+                        self.frida_manager = FridaServiceClass(log_callback=log_callback)
+                        self._add_log_direct(f"Using {FridaServiceClass.__name__} (fallback)")
+
+                    # 启动 Frida 服务
+                    if hasattr(self.frida_manager, 'start'):
+                        if not self.frida_manager.start():
+                            self._add_log_direct("ERROR: Frida service start failed")
+                            self._on_start_failed()
+                            return
+                    elif hasattr(self.frida_manager, 'start_frida_server'):
+                        if not self.frida_manager.start_frida_server():
+                            self._add_log_direct("ERROR: Failed to start Frida Server")
+                            self._on_start_failed()
+                            return
+                    else:
+                        self._add_log_direct("ERROR: Unknown Frida service interface")
+                        self._on_start_failed()
+                        return
+
+                except Exception as e:
+                    self._add_log_direct(f"ERROR: Frida service initialization failed: {e}")
+                    self._on_start_failed()
+                    return
+            else:
+                self._add_log_direct("ERROR: No Frida service available")
                 self._on_start_failed()
                 return
             

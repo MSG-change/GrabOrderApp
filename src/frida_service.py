@@ -272,6 +272,53 @@ class FridaTokenServiceSimple:
         
         self.token_callback = None
         self.token_file = "/sdcard/grab_order_token.json"
+        
+        # Try to start external Frida server if available
+        self._try_start_external_frida()
+    
+    def _try_start_external_frida(self):
+        """Try to start external Frida server for MuMu emulator"""
+        try:
+            # Check if we're in Android environment
+            try:
+                import android
+                is_android = True
+            except ImportError:
+                is_android = False
+            
+            if not is_android:
+                return  # Not in Android, skip
+            
+            # Check if Frida server is already running
+            result = subprocess.run(['ps'], capture_output=True, text=True, timeout=2)
+            if 'frida-server' in result.stdout:
+                self.log("External Frida server already running")
+                return
+            
+            # Try to start Frida server if it exists
+            frida_paths = [
+                '/data/local/tmp/frida-server',
+                '/data/local/tmp/frida-server-arm64',
+                '/system/bin/frida-server'
+            ]
+            
+            for path in frida_paths:
+                if os.path.exists(path):
+                    try:
+                        # Start in background
+                        subprocess.Popen([path, '-D'], 
+                                       stdout=subprocess.DEVNULL, 
+                                       stderr=subprocess.DEVNULL)
+                        self.log(f"Started external Frida server: {path}")
+                        time.sleep(1)  # Give it time to start
+                        return
+                    except Exception as e:
+                        self.log(f"Failed to start {path}: {e}")
+            
+            self.log("No external Frida server found, using file monitoring only")
+            
+        except Exception as e:
+            self.log(f"External Frida check error: {e}")
     
     def set_token_callback(self, callback):
         """设置回调"""
