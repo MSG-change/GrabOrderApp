@@ -400,109 +400,43 @@ class FastGrabOrderService:
         self.log(f"[GRAB] All concurrent grabs completed in {total_time:.1f}ms")
     
     def _grab_order_fast(self, order):
-        """快速抢单（单个订单）"""
-        total_start = time.time()
+        """
+        抢单 - 必须先进行九宫格验证
+        
+        Returns:
+            bool: 抢单是否成功
+        """
         try:
-            # 步骤1：提取订单ID
-            t1 = time.time()
+            # 统计抢单尝试
+            self.stats['grab_attempts'] += 1
+            
+            # 获取订单ID
             order_id = self._get_order_id(order)
             if not order_id:
                 self.log(f"[ERROR] Failed to get order ID from order: {order}")
                 return False
-            id_time = (time.time() - t1) * 1000  # 转换为毫秒
             
-            # 步骤2：准备请求数据
-            t2 = time.time()
-            url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
-            
-            # 转换 order_id 为整数（curl证明API需要整数）
+            # 转换为整数
             try:
                 order_id_int = int(order_id)
             except:
                 order_id_int = order_id
             
-            # 包含空的 geeDto 结构（即使不需要验证也要发送）
-            data = {
-                "orderId": order_id_int,  # 使用整数格式
-                "geeDto": {}  # 空的 geeDto，让服务器决定是否需要验证
-            }
-            prep_time = (time.time() - t2) * 1000
+            self.log(f"[GRAB] Grabbing order: {order_id}")
             
-            self.log(f"[GRAB] Attempting to grab order: {order_id}")
-            self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms, Prep: {prep_time:.1f}ms")
-            self.log(f"  [REQUEST] POST {url}")
-            self.log(f"  [DATA] orderId={order_id_int} (type: {type(order_id_int).__name__}), geeDto={{}}")
+            # 直接进行九宫格验证抢单（不尝试空geeDto）
+            success = self._grab_with_geetest(order_id_int)
             
-            # 打印订单的其他关键字段，可能有用
-            if 'orderNo' in order:
-                self.log(f"  [DEBUG] orderNo: {order.get('orderNo')}")
-            if 'status' in order:
-                self.log(f"  [DEBUG] status: {order.get('status')}")
-            
-            # 步骤3：发送请求
-            t3 = time.time()
-            response = self.session.post(url, json=data)
-            request_time = (time.time() - t3) * 1000
-            
-            # Log response
-            self.log(f"  [RESPONSE] Status: {response.status_code} (took {request_time:.1f}ms)")
-            
-            # Log response for debugging
-            if response.status_code != 200:
-                self.log(f"  [DEBUG] HTTP {response.status_code}: {response.text[:100]}")
-            
-            # 步骤4：解析响应
-            t4 = time.time()
-            result = response.json()
-            parse_time = (time.time() - t4) * 1000
-            
-            total_time = (time.time() - total_start) * 1000
-            self.log(f"  [RESPONSE] Code: {result.get('code')}, Msg: {result.get('msg', 'N/A')}")
-            self.log(f"  [TIMING] Request: {request_time:.1f}ms, Parse: {parse_time:.1f}ms, Total: {total_time:.1f}ms")
-            
-            self.stats['grab_attempts'] += 1
-            self.stats['avg_grab_time'].append(total_time / 1000)  # 存储秒数
-            
-            # API 返回 code=0 或 code=200 都表示成功
-            if result.get('code') in [0, 200]:
+            if success:
                 self.stats['grab_success'] += 1
-                self.log(f"  [SUCCESS] Order {order_id} grabbed in {total_time:.1f}ms")
-                # 抢单成功后才缓存
+                # 抢单成功后缓存
                 self.order_cache[order_id] = time.time()
                 return True
-            
-            elif result.get('code') == 1001:
-                # Needs Geetest verification
-                self.log(f"  [CAPTCHA] Order {order_id} requires verification")
-                success = self._grab_with_geetest(order_id_int)  # 传递整数
-                if success:
-                    self.stats['grab_success'] += 1
-                    return True
-            
             else:
-                msg = result.get('msg', 'Unknown')
-                code = result.get('code', 'N/A')
-                
-                # Code 500 "订单不存在" - 可能需要验证码
-                if code == 500 and "订单不存在" in msg:
-                    self.log(f"  [RETRY] Code 500 - Trying with Geetest verification")
-                    # 尝试使用验证码抢单
-                    success = self._grab_with_geetest(order_id_int)
-                    if success:
-                        self.stats['grab_success'] += 1
-                        return True
-                    else:
-                        self.stats['grab_failed'] += 1
-                        # 验证码也失败了，可能真的不存在
-                        self.order_cache[order_id] = time.time()
-                        return False
-                else:
-                    self.stats['grab_failed'] += 1
-                    self.log(f"  [FAILED] Order {order_id}: Code {code} - {msg}")
-                    # 其他错误码处理
-                    if code in [404, 400]:  # 只缓存明确的失败
-                        self.order_cache[order_id] = time.time()
-                    return False
+                self.stats['grab_failed'] += 1
+                # 失败也缓存，避免重复尝试
+                self.order_cache[order_id] = time.time()
+                return False
         
         except Exception as e:
             self.stats['grab_failed'] += 1

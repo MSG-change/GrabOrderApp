@@ -14,7 +14,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json,js,ttf,pth
 
 # Version
-version = 1.6.0
+version = 1.7.0
 
 # Application requirements (Python packages)
 # Minimal requirements for stability
