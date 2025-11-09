@@ -16,14 +16,14 @@ source.include_exts = py,png,jpg,kv,atlas,json,onnx,js,ttf,xz
 source.include_patterns = assets/*,libs/*,src/*
 
 # Version
-version = 1.2.4
+version = 1.2.5
 
 # Application requirements (Python packages)
 # Removed numpy dependency (using pure Python + PIL + Java ONNX Runtime)
 # Android uses remote API for W parameter generation, no execjs needed
 # Note: Frida removed from requirements to avoid architecture conflicts
 # The app will use external Frida server approach for MuMu emulator
-requirements = python3,kivy==2.2.1,pillow,requests,pyjnius,android
+requirements = python3,kivy==2.3.0,pillow,requests,pyjnius,android
 
 # Frida ARM64 specific configuration
 android.whitelist =
