@@ -11,16 +11,15 @@ package.domain = com.graborder
 
 # Main program entry
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,json,js,ttf,pth
+source.include_exts = py,png,jpg,kv,atlas,json,js,ttf,pth,onnx
 
 # Version
 version = 1.7.3
 
 # Application requirements (Python packages)
-# Minimal requirements for stability
-# Note: torch/torchvision removed - too large for GitHub Actions
-# Model inference will be disabled in Actions build
-requirements = python3,kivy==2.3.0,pillow,requests,pyjnius,android,numpy
+# ONNX Runtime for Android - lightweight AI inference
+# Much smaller than torch (10MB vs 500MB)
+requirements = python3,kivy==2.3.0,pillow,requests,pyjnius,android,numpy,onnxruntime
 
 # Android configuration
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,SYSTEM_ALERT_WINDOW,FOREGROUND_SERVICE

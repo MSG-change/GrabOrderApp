@@ -8,16 +8,19 @@ import requests
 import json
 import time
 import hashlib
+import os
 from typing import Optional, Dict, List
 from PIL import Image
 import io
 try:
-    import torch
-    from siamese_network import SiameseNetwork, get_transforms
-    TORCH_AVAILABLE = True
+    from onnx_inference import get_inference_engine, ONNX_AVAILABLE
+    if ONNX_AVAILABLE:
+        print("✅ 使用ONNX推理（Android优化）")
+    else:
+        print("⚠️  ONNX未安装，使用轻量级备用方案")
 except ImportError:
-    TORCH_AVAILABLE = False
-    print("⚠️  PyTorch not available, Siamese model disabled")
+    ONNX_AVAILABLE = False
+    print("⚠️  无法导入ONNX推理器")
 
 from local_w_generator import LocalWGenerator
 
@@ -26,7 +29,7 @@ class GeetestHelperLocal:
     """Geetest 验证码助手（本地模型）"""
     
     def __init__(self,
-                 model_path: str = "best_siamese_model.pth",
+                 model_path: str = "siamese_model_quantized.onnx",
                  captcha_id: str = "045e2c229998a88721e32a763bc0f7b8",
                  threshold: float = 0.5,
                  js_file_path: str = None):
@@ -34,12 +37,12 @@ class GeetestHelperLocal:
         初始化
         
         Args:
-            model_path: 模型文件路径
+            model_path: ONNX模型文件路径
             captcha_id: Geetest的captcha_id
             threshold: 相似度阈值
             js_file_path: gcaptcha4_click.js 文件路径（可选）
         """
-        print("🔧 初始化 Geetest 验证器（本地模型 + 本地W参数）...")
+        print("🔧 初始化 Geetest 验证器（ONNX模型 + 本地W参数）...")
         
         self.captcha_id = captcha_id
         self.threshold = threshold
@@ -52,38 +55,31 @@ class GeetestHelperLocal:
             print(f"   请确保 jiyanv4/gcaptcha4_click.js 文件存在")
             raise
         
-        # 加载模型（如果torch可用）
-        if TORCH_AVAILABLE:
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            print(f"   设备: {self.device}")
+        # 初始化推理引擎（ONNX或轻量级）
+        try:
+            from onnx_inference import ONNXInference, AndroidOptimizedInference
             
-            try:
-                self.model = SiameseNetwork(feature_dim=512)
-                checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+            # 优先使用ONNX模型
+            if os.path.exists(model_path):
+                print(f"   📦 加载ONNX模型: {model_path}")
+                self.inference_engine = ONNXInference(model_path)
+            else:
+                # 检查是否有.pth文件需要转换
+                pth_path = model_path.replace('.onnx', '.pth')
+                if os.path.exists(pth_path):
+                    print(f"   ⚠️  发现PyTorch模型，请运行 python convert_to_onnx.py 转换")
                 
-                # 处理不同的checkpoint格式
-                if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-                    self.model.load_state_dict(checkpoint['model_state_dict'])
-                    accuracy = checkpoint.get('val_acc', 0) * 100
-                    print(f"   模型准确率: {accuracy:.2f}%")
-                else:
-                    self.model.load_state_dict(checkpoint)
+                print(f"   📌 使用轻量级推理器（无需模型文件）")
+                self.inference_engine = AndroidOptimizedInference()
                 
-                self.model.to(self.device)
-                self.model.eval()
-                
-                # 获取图片变换
-                _, self.transform = get_transforms()
-            except Exception as e:
-                print(f"   ⚠️  模型加载失败: {e}")
-                print(f"   将使用备用方案（固定选择）")
-                self.model = None
-                self.transform = None
-        else:
-            print("   📌 使用备用方案（无模型）")
-            self.model = None
-            self.transform = None
-            self.device = None
+        except Exception as e:
+            print(f"   ⚠️  推理引擎初始化失败: {e}")
+            print(f"   📌 使用固定选择模式")
+            # 创建简单的备用推理器
+            class SimpleInference:
+                def predict_batch(self, question_img, grid_cells):
+                    return [0, 1, 2]  # 固定选择前3个
+            self.inference_engine = SimpleInference()
         
         # Android 客户端请求头
         self.android_headers = {
@@ -127,22 +123,14 @@ class GeetestHelperLocal:
         return cells
     
     def predict_similarity(self, question_img: Image.Image, candidate_img: Image.Image) -> float:
-        """预测相似度"""
-        if not TORCH_AVAILABLE or self.model is None:
-            # 备用方案：返回固定的相似度（选择前3个）
-            return 0.6  # 高于阈值，会被选中
-            
+        """预测相似度（使用ONNX推理）"""
         try:
-            # 转换为tensor
-            question_tensor = self.transform(question_img).unsqueeze(0).to(self.device)
-            candidate_tensor = self.transform(candidate_img).unsqueeze(0).to(self.device)
-            
-            # 推理
-            with torch.no_grad():
-                logits, _, _ = self.model(question_tensor, candidate_tensor)
-                prob = torch.sigmoid(logits).item()
-            
-            return prob
+            if hasattr(self.inference_engine, 'predict'):
+                # 使用ONNX推理
+                return self.inference_engine.predict(question_img, candidate_img)
+            else:
+                # 备用方案
+                return 0.6  # 高于阈值，会被选中
         except Exception as e:
             print(f"   预测失败: {e}")
             return 0.0
@@ -171,17 +159,22 @@ class GeetestHelperLocal:
         cells = self.split_grid(grid_img)
         
         # 预测每个格子
-        answers = []
-        
-        if not TORCH_AVAILABLE or self.model is None:
-            # 备用方案：固定选择前3个格子
-            answers = [0, 1, 2]
-            print(f"   📌 使用备用选择: {answers}")
+        if hasattr(self.inference_engine, 'predict_batch'):
+            # 使用批量预测（更高效）
+            answers = self.inference_engine.predict_batch(question_img, cells)
+            print(f"   🎯 选择格子: {answers}")
         else:
+            # 使用单个预测
+            answers = []
             for idx, cell in enumerate(cells):
                 score = self.predict_similarity(question_img, cell)
                 if score > self.threshold:
                     answers.append(idx)
+            
+            if not answers:
+                # 至少选择3个
+                answers = [0, 1, 2]
+                print(f"   📌 使用默认选择: {answers}")
         
         return answers
     

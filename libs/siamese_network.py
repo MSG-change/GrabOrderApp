@@ -159,20 +159,26 @@ class ResNetBackbone(BaseModule):
     def __init__(self, pretrained=True, feature_dim=512):
         if TORCH_AVAILABLE:
             super(ResNetBackbone, self).__init__()
-        
-        # 使用预训练的ResNet-18
-        self.resnet = models.resnet18(pretrained=pretrained)
-        
-        # 移除最后的分类层
-        self.resnet = nn.Sequential(*list(self.resnet.children())[:-1])
-        
-        # 添加特征降维层
-        self.feature_projector = nn.Sequential(
-            nn.Linear(512, feature_dim),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(feature_dim, feature_dim)
-        )
+            
+            # 使用预训练的ResNet-18（兼容新旧版本）
+            try:
+                # 新版本使用weights参数
+                from torchvision.models import ResNet18_Weights
+                self.resnet = models.resnet18(weights=ResNet18_Weights.DEFAULT if pretrained else None)
+            except ImportError:
+                # 旧版本使用pretrained参数
+                self.resnet = models.resnet18(pretrained=pretrained)
+            
+            # 移除最后的分类层
+            self.resnet = nn.Sequential(*list(self.resnet.children())[:-1])
+            
+            # 添加特征降维层
+            self.feature_projector = nn.Sequential(
+                nn.Linear(512, feature_dim),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(feature_dim, feature_dim)
+            )
         
     def forward(self, x):
         # 提取特征
@@ -194,22 +200,22 @@ class SiameseNetwork(BaseModule):
     def __init__(self, feature_dim=512):
         if TORCH_AVAILABLE:
             super(SiameseNetwork, self).__init__()
-        
-        # 共享的特征提取器
-        self.backbone = ResNetBackbone(pretrained=True, feature_dim=feature_dim)
-        
-        # 相似度计算层（输出logits，不使用sigmoid）
-        # 配合BCEWithLogitsLoss使用，数值更稳定
-        self.similarity_head = nn.Sequential(
-            nn.Linear(feature_dim * 2, 256),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 1)
-            # 注意：不使用Sigmoid，输出logits给BCEWithLogitsLoss
-        )
+            
+            # 共享的特征提取器
+            self.backbone = ResNetBackbone(pretrained=True, feature_dim=feature_dim)
+            
+            # 相似度计算层（输出logits，不使用sigmoid）
+            # 配合BCEWithLogitsLoss使用，数值更稳定
+            self.similarity_head = nn.Sequential(
+                nn.Linear(feature_dim * 2, 256),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(256, 128),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(128, 1)
+                # 注意：不使用Sigmoid，输出logits给BCEWithLogitsLoss
+            )
         
     def forward(self, img1, img2):
         # 提取两个图像的特征
