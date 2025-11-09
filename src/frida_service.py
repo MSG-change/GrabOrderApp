@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Frida Token 获取服务
-通过 Frida Hook 目标 APP 自动获取 Token
+Frida Token Service
+Automatically captures tokens from target app via Frida Hook
 """
 
 import os
@@ -18,19 +18,19 @@ try:
     FRIDA_AVAILABLE = True
 except ImportError:
     FRIDA_AVAILABLE = False
-    print("⚠️ Frida 未安装，使用文件监控模式")
+    print("⚠️ Frida not installed, using file monitoring mode")
 
 
 class FridaTokenService:
-    """Frida Token 获取服务"""
+    """Frida Token Service"""
     
     def __init__(self, target_package="com.your.target.app", log_callback=None):
         """
-        初始化
+        Initialize
         
         Args:
-            target_package: 目标 APP 包名
-            log_callback: 日志回调函数
+            target_package: Target app package name
+            log_callback: Log callback function
         """
         self.target_package = target_package
         self.log_callback = log_callback
@@ -38,7 +38,7 @@ class FridaTokenService:
         self.running = False
         self.thread = None
         
-        # Token 数据
+        # Token data
         self.token_data = {
             'token': '',
             'club_id': '',
@@ -47,50 +47,50 @@ class FridaTokenService:
             'timestamp': 0
         }
         
-        # Token 更新回调
+        # Token update callback
         self.token_callback = None
         
-        # Frida 相关
+        # Frida related
         self.device = None
         self.session = None
         self.script = None
         
-        # Token 文件路径
+        # Token file path
         self.token_file = "/sdcard/grab_order_token.json"
         
-        # 使用模式
+        # Usage mode
         self.use_frida = FRIDA_AVAILABLE
-        self.use_file_watch = True  # 始终启用文件监控作为备用
+        self.use_file_watch = True  # Always enable file monitoring as backup
     
     def set_token_callback(self, callback):
-        """设置 Token 更新回调"""
+        """Set token update callback"""
         self.token_callback = callback
     
     def start(self):
-        """启动服务"""
+        """Start service"""
         if self.running:
-            self.log("⚠️ Frida 服务已在运行中")
+            self.log("⚠️ Frida service already running")
             return False
         
         self.running = True
         
-        # 尝试启动 Frida Hook
+        # Try to start Frida Hook
         if self.use_frida:
             success = self._start_frida_hook()
             if not success:
-                self.log("⚠️ Frida Hook 启动失败，切换到文件监控模式")
+                self.log("⚠️ Frida Hook failed to start, switching to file monitoring mode")
                 self.use_frida = False
         
-        # 启动文件监控（备用方案）
+        # Start file monitoring (backup solution)
         if self.use_file_watch:
             self.thread = threading.Thread(target=self._watch_token_file, daemon=True)
             self.thread.start()
-            self.log("✅ Token 文件监控已启动")
+            self.log("✅ Token file monitoring started")
         
         return True
     
     def stop(self):
-        """停止服务"""
+        """Stop service"""
         self.running = False
         
         if self.script:
@@ -108,77 +108,77 @@ class FridaTokenService:
         if self.thread:
             self.thread.join(timeout=2)
         
-        self.log("⏹️ Frida 服务已停止")
+        self.log("⏹️ Frida service stopped")
     
     def _start_frida_hook(self):
-        """启动 Frida Hook"""
+        """Start Frida Hook"""
         try:
-            self.log("🔧 正在连接 Frida...")
+            self.log("🔧 Connecting to Frida...")
             
-            # 获取 USB 设备
+            # Get USB device
             self.device = frida.get_usb_device(timeout=5)
-            self.log(f"✅ 已连接设备: {self.device}")
+            self.log(f"✅ Connected to device: {self.device}")
             
-            # 检查目标 APP 是否运行
+            # Check if target app is running
             try:
-                # 尝试附加到运行中的进程
-                self.log(f"📱 正在附加到: {self.target_package}")
+                # Try to attach to running process
+                self.log(f"📱 Attaching to: {self.target_package}")
                 self.session = self.device.attach(self.target_package)
-                self.log("✅ 已附加到目标 APP")
+                self.log("✅ Attached to target app")
             except frida.ProcessNotFoundError:
-                self.log(f"⚠️ 目标 APP 未运行: {self.target_package}")
-                self.log("   请先启动目标 APP，然后重新启动此服务")
+                self.log(f"⚠️ Target app not running: {self.target_package}")
+                self.log("   Please start the target app first, then restart this service")
                 return False
             
-            # 加载 Frida 脚本
+            # Load Frida script
             script_path = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)),
                 'frida_token_grabber.js'
             )
             
             if not os.path.exists(script_path):
-                self.log(f"❌ Frida 脚本不存在: {script_path}")
+                self.log(f"❌ Frida script not found: {script_path}")
                 return False
             
             with open(script_path, 'r', encoding='utf-8') as f:
                 script_code = f.read()
             
-            self.log("🔧 正在加载 Frida 脚本...")
+            self.log("🔧 Loading Frida script...")
             self.script = self.session.create_script(script_code)
             self.script.on('message', self._on_frida_message)
             self.script.load()
             
-            self.log("✅ Frida Hook 已激活")
-            self.log("   等待目标 APP 发送网络请求...")
+            self.log("✅ Frida Hook activated")
+            self.log("   Waiting for target app to send network requests...")
             
             return True
             
         except Exception as e:
-            self.log(f"❌ Frida Hook 启动失败: {e}")
+            self.log(f"❌ Frida Hook startup failed: {e}")
             import traceback
             self.log(traceback.format_exc()[:200])
             return False
     
     def _on_frida_message(self, message, data):
-        """处理 Frida 消息"""
+        """Handle Frida messages"""
         try:
             if message['type'] == 'send':
                 payload = message['payload']
                 
                 if payload.get('type') == 'token_update':
-                    # Token 更新
+                    # Token update
                     token_data = payload.get('data', {})
                     self._update_token(token_data)
                     
             elif message['type'] == 'error':
-                self.log(f"⚠️ Frida 错误: {message.get('description', 'Unknown')}")
+                self.log(f"⚠️ Frida error: {message.get('description', 'Unknown')}")
                 
         except Exception as e:
-            self.log(f"❌ 处理 Frida 消息失败: {e}")
+            self.log(f"❌ Failed to handle Frida message: {e}")
     
     def _watch_token_file(self):
-        """监控 Token 文件（备用方案）"""
-        self.log("📂 Token 文件监控已启动")
+        """Monitor token file (backup solution)"""
+        self.log("📂 Token file monitoring started")
         
         last_mtime = 0
         
@@ -190,22 +190,22 @@ class FridaTokenService:
                     if mtime > last_mtime:
                         last_mtime = mtime
                         
-                        # 读取文件
+                        # Read file
                         with open(self.token_file, 'r') as f:
                             data = json.load(f)
                         
-                        # 更新 Token
+                        # Update Token
                         if data.get('token'):
                             self._update_token(data)
                 
             except Exception as e:
-                pass  # 静默错误，避免刷屏
+                pass  # Silent error to avoid spamming
             
-            time.sleep(0.5)  # 每 0.5 秒检查一次
+            time.sleep(0.5)  # Check every 0.5 seconds
     
     def _update_token(self, data):
-        """更新 Token"""
-        # 检查是否有变化
+        """Update Token"""
+        # Check if there are changes
         changed = False
         
         token = data.get('token', '').replace('Bearer ', '').strip()
@@ -216,7 +216,7 @@ class FridaTokenService:
         if token and token != self.token_data['token']:
             self.token_data['token'] = token
             changed = True
-            self.log(f"🎯 Token 已更新: {token[:20]}...")
+            self.log(f"🎯 Token updated: {token[:20]}...")
         
         if club_id and club_id != self.token_data['club_id']:
             self.token_data['club_id'] = str(club_id)
@@ -236,16 +236,16 @@ class FridaTokenService:
         if changed:
             self.token_data['timestamp'] = int(time.time())
             
-            # 回调通知
+            # Callback notification
             if self.token_callback:
                 self.token_callback(self.token_data)
     
     def get_token_data(self):
-        """获取当前 Token 数据"""
+        """Get current token data"""
         return self.token_data.copy()
     
     def log(self, message):
-        """输出日志"""
+        """Output log message"""
         if self.log_callback:
             self.log_callback(message)
         else:
@@ -254,10 +254,10 @@ class FridaTokenService:
 
 
 class FridaTokenServiceSimple:
-    """简化版 Frida Token 服务（仅文件监控）"""
+    """Simplified Frida Token Service (file monitoring only)"""
     
     def __init__(self, log_callback=None):
-        """初始化"""
+        """Initialize"""
         self.log_callback = log_callback
         self.running = False
         self.thread = None
@@ -321,11 +321,11 @@ class FridaTokenServiceSimple:
             self.log(f"External Frida check error: {e}")
     
     def set_token_callback(self, callback):
-        """设置回调"""
+        """Set callback"""
         self.token_callback = callback
     
     def start(self):
-        """启动"""
+        """Start"""
         if self.running:
             return False
         
@@ -333,21 +333,21 @@ class FridaTokenServiceSimple:
         self.thread = threading.Thread(target=self._watch_file, daemon=True)
         self.thread.start()
         
-        self.log("✅ Token 监控已启动")
-        self.log(f"   监控文件: {self.token_file}")
-        self.log("   请确保 Frida 脚本在 PC 或其他终端运行")
+        self.log("✅ Token monitoring started")
+        self.log(f"   Monitoring file: {self.token_file}")
+        self.log("   Please ensure Frida script is running on PC or other terminal")
         
         return True
     
     def stop(self):
-        """停止"""
+        """Stop"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=2)
-        self.log("⏹️ Token 监控已停止")
+        self.log("⏹️ Token monitoring stopped")
     
     def _watch_file(self):
-        """监控文件"""
+        """Monitor file"""
         last_mtime = 0
         
         while self.running:
@@ -369,7 +369,7 @@ class FridaTokenServiceSimple:
             time.sleep(0.5)
     
     def _update_token(self, data):
-        """更新 Token"""
+        """Update Token"""
         changed = False
         
         token = data.get('token', '').replace('Bearer ', '').strip()
@@ -391,11 +391,11 @@ class FridaTokenServiceSimple:
                 self.token_callback(self.token_data)
     
     def get_token_data(self):
-        """获取 Token"""
+        """Get token"""
         return self.token_data.copy()
     
     def log(self, message):
-        """日志"""
+        """Log"""
         if self.log_callback:
             self.log_callback(message)
         else:

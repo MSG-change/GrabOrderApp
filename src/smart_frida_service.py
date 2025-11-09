@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Smart Frida Service - Intelligent Environment Detection and Architecture Selection
-智能 Frida 服务 - 环境检测和架构智能选择
 
 Automatically detects runtime environment (MuMu emulator, ARM64 device, x86 PC)
 and selects the optimal Frida service architecture with automatic fallback.

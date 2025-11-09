@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 MuMu Emulator Frida Service
-专为 MuMu 模拟器设计的 Frida 服务
-使用外部 Frida Server 避免架构冲突问题
+Specialized Frida service for MuMu emulator
+Uses external Frida Server to avoid architecture conflicts
 """
 
 import os
@@ -31,18 +31,18 @@ except ImportError:
 
 class MuMuFridaService:
     """
-    MuMu 专用 Frida 服务
-    使用外部 Frida Server 运行在 /data/local/tmp/
-    避免 Python Frida 库的架构冲突问题
+    MuMu specialized Frida service
+    Uses external Frida Server running in /data/local/tmp/
+    Avoids Python Frida library architecture conflicts
     """
     
     def __init__(self, target_package="com.dys.shzs", log_callback=None):
         """
-        初始化 MuMu Frida 服务
+        Initialize MuMu Frida service
         
         Args:
-            target_package: 目标 APP 包名
-            log_callback: 日志回调函数
+            target_package: Target app package name
+            log_callback: Log callback function
         """
         self.target_package = target_package
         self.log_callback = log_callback
@@ -50,13 +50,13 @@ class MuMuFridaService:
         self.running = False
         self.monitor_thread = None
         
-        # Frida 相关
+        # Frida related
         self.device = None
         self.session = None
         self.script = None
         self.frida_server_process = None
         
-        # Token 数据
+        # Token data
         self.token_data = {
             'token': '',
             'club_id': '',
@@ -65,10 +65,10 @@ class MuMuFridaService:
             'timestamp': 0
         }
         
-        # Token 更新回调
+        # Token update callback
         self.token_callback = None
         
-        # Frida server 路径
+        # Frida server paths
         self.frida_server_paths = [
             '/data/local/tmp/frida-server',
             '/data/local/tmp/frida-server-arm64',
@@ -79,7 +79,7 @@ class MuMuFridaService:
         self.is_mumu = self._check_mumu_environment()
         
     def _check_mumu_environment(self):
-        """检查是否在 MuMu 环境中运行"""
+        """Check if running in MuMu environment"""
         try:
             if ANDROID_AVAILABLE:
                 # Check Android properties for MuMu signatures
@@ -110,11 +110,11 @@ class MuMuFridaService:
         return False
     
     def set_token_callback(self, callback):
-        """设置 Token 更新回调"""
+        """Set token update callback"""
         self.token_callback = callback
     
     def start(self):
-        """启动 MuMu Frida 服务"""
+        """Start MuMu Frida service"""
         if self.running:
             self.log("⚠️ MuMu Frida service already running")
             return False
@@ -143,7 +143,7 @@ class MuMuFridaService:
         return True
     
     def _start_external_frida_server(self):
-        """启动外部 Frida Server"""
+        """Start external Frida server"""
         try:
             self.log("🔧 Starting external Frida server...")
             
@@ -262,7 +262,7 @@ class MuMuFridaService:
         return False
     
     def _connect_frida_python(self):
-        """使用 Python Frida 模块连接"""
+        """Connect using Python Frida module"""
         try:
             self.log("🔌 Connecting via Frida Python module...")
             
@@ -312,7 +312,7 @@ class MuMuFridaService:
             return False
     
     def _load_frida_script(self):
-        """加载 Frida Hook 脚本"""
+        """Load Frida Hook script"""
         try:
             # Frida script content
             script_code = """
@@ -405,7 +405,7 @@ class MuMuFridaService:
             return False
     
     def _on_frida_message(self, message, data):
-        """处理 Frida 消息"""
+        """Handle Frida messages"""
         try:
             if message['type'] == 'send':
                 payload = message['payload']
@@ -430,7 +430,7 @@ class MuMuFridaService:
             self.log(f"❌ Message handling error: {e}")
     
     def _start_monitoring_fallback(self):
-        """启动监控降级模式"""
+        """Start monitoring fallback mode"""
         self.log("📂 Starting monitoring fallback mode...")
         self.log("   This mode monitors for tokens via alternative methods")
         
@@ -442,7 +442,7 @@ class MuMuFridaService:
         return True
     
     def _monitor_loop(self):
-        """监控循环"""
+        """Monitoring loop"""
         while self.running:
             try:
                 # Check if Frida server is still running
@@ -463,7 +463,7 @@ class MuMuFridaService:
             time.sleep(5)  # Check every 5 seconds
     
     def _update_token(self, data):
-        """更新 Token"""
+        """Update token"""
         try:
             changed = False
             
@@ -503,7 +503,7 @@ class MuMuFridaService:
             self.log(f"❌ Failed to update token: {e}")
     
     def stop(self):
-        """停止服务"""
+        """Stop service"""
         self.running = False
         self.log("⏹️ Stopping MuMu Frida Service")
         
@@ -539,11 +539,11 @@ class MuMuFridaService:
         self.log("✅ MuMu Frida Service stopped")
     
     def get_token_data(self):
-        """获取当前 Token 数据"""
+        """Get current token data"""
         return self.token_data.copy()
     
     def get_status(self):
-        """获取服务状态"""
+        """Get service status"""
         return {
             'running': self.running,
             'is_mumu': self.is_mumu,
@@ -555,7 +555,7 @@ class MuMuFridaService:
         }
     
     def log(self, message):
-        """输出日志"""
+        """Output log message"""
         if self.log_callback:
             self.log_callback(message)
         else:
