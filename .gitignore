@@ -3,8 +3,10 @@
 bin/
 
 # Large files (will be included in APK build)
+best_siamese_model.pth
 assets/best_siamese_model.pth
 assets/**/*.pth
+*.pth
 assets/jiyanv4/node_modules/
 
 # Python cache
