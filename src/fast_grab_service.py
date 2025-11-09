@@ -8,6 +8,7 @@
 import os
 import sys
 import time
+import json
 import threading
 import queue
 from datetime import datetime
@@ -434,8 +435,9 @@ class FastGrabOrderService:
                 return True
             else:
                 self.stats['grab_failed'] += 1
-                # 失败也缓存，避免重复尝试
-                self.order_cache[order_id] = time.time()
+                # 不缓存失败的订单，允许下次重试
+                # 只有明确成功或特定错误码才缓存
+                self.log(f"  [GRAB] Order {order_id} failed, will retry if available")
                 return False
         
         except Exception as e:
@@ -529,8 +531,15 @@ class FastGrabOrderService:
             self.log(f"  [GEEDTO] captchaOutput: {gee_dto.get('captchaOutput', 'N/A')[:30]}...")
             self.log(f"  [GEEDTO] passToken: {gee_dto.get('passToken', 'N/A')[:30]}...")
             
-            response = self.session.post(url, json=payload)
+            response = self.session.post(url, json=payload, timeout=10)
+            
+            # 打印完整请求信息用于调试
+            self.log(f"  [DEBUG] Request Headers: {dict(self.session.headers)}")
+            self.log(f"  [DEBUG] Request Payload: {json.dumps(payload, ensure_ascii=False)}")
+            self.log(f"  [DEBUG] Response Status: {response.status_code}")
+            
             result = response.json()
+            self.log(f"  [DEBUG] Response Body: {json.dumps(result, ensure_ascii=False)}")
             
             if result.get('code') == 200 or result.get('code') == 0:
                 self.log(f"  [SUCCESS] Captcha solved, order grabbed!")
@@ -538,10 +547,19 @@ class FastGrabOrderService:
                 self.order_cache[order_id] = time.time()
                 return True
             else:
-                self.log(f"  [FAILED] Captcha solved but grab failed: {result.get('msg')}")
-                # 验证码失败根据错误码决定是否缓存
-                if result.get('code') in [500, 404, 400]:
+                code = result.get('code')
+                msg = result.get('msg', 'Unknown error')
+                self.log(f"  [FAILED] Captcha solved but grab failed: Code {code} - {msg}")
+                
+                # 根据错误码决定是否缓存
+                # 500: 订单不存在（可能已被抢），不缓存，允许重试
+                # 404/400: 明确的错误，缓存避免重复尝试
+                if code in [404, 400]:
+                    self.log(f"  [CACHE] Adding order {order_id} to cache (error {code})")
                     self.order_cache[order_id] = time.time()
+                elif code == 500:
+                    self.log(f"  [SKIP_CACHE] Not caching order {order_id} (500 error, may retry)")
+                
                 return False
         
         except Exception as e:
