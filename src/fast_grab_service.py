@@ -269,12 +269,13 @@ class FastGrabOrderService:
                 'userServerAreaId': ''
             }
             
-            # Check if token is set (only log once per 20 checks to avoid spam)
-            if self.stats['checks'] % 20 == 0:
-                auth_header = self.session.headers.get('authorization', 'NOT SET')
-                self.log(f"[DEBUG] Auth header: {auth_header[:40]}..." if len(auth_header) > 40 else f"[DEBUG] Auth header: {auth_header}")
+            # Log every request
+            self.log(f"[REQUEST] GET {url}?productCategoryParentId={self.category_id}")
             
             response = self.session.get(url, params=params)
+            
+            # Log response
+            self.log(f"[RESPONSE] Status: {response.status_code}")
             
             # Log response status for debugging
             if response.status_code != 200:
@@ -370,14 +371,14 @@ class FastGrabOrderService:
             
             data = {"orderId": order_id_int}
             
-            self.log(f"  [REQUEST] POST {url}")
-            self.log(f"  [DATA] {data}")
-            
-            # Log current headers for debugging
-            auth_header = self.session.headers.get('authorization', 'NOT SET')
-            self.log(f"  [AUTH] {auth_header[:40]}..." if len(auth_header) > 40 else f"  [AUTH] {auth_header}")
+            self.log(f"[GRAB] Attempting to grab order: {order_id}")
+            self.log(f"[REQUEST] POST {url}")
+            self.log(f"[DATA] orderId={order_id}")
             
             response = self.session.post(url, json=data)
+            
+            # Log response
+            self.log(f"[RESPONSE] Status: {response.status_code}")
             
             # Log response for debugging
             if response.status_code != 200:
