@@ -11,39 +11,16 @@ import hashlib
 from typing import Optional, Dict, List
 from PIL import Image
 import io
-from siamese_onnx import SiameseONNX
-
-# 根据环境选择W参数生成器
-import os
-is_android = os.path.exists('/data/data') or os.path.exists('/system/bin/app_process')
-
-if is_android:
-    # Android环境：使用本地 WebView 方案
-    print("   🤖 Android环境 → 使用本地 WebView 生成W参数")
-    try:
-        from android_local_w_generator import AndroidLocalWGenerator as LocalWGenerator
-        print("      ✅ AndroidLocalWGenerator 加载成功")
-    except ImportError as e:
-        print(f"      ⚠️ AndroidLocalWGenerator 加载失败: {e}")
-        print("      → 回退到远程API")
-        from android_w_generator import AndroidWGenerator as LocalWGenerator
-else:
-    # PC环境：尝试使用本地JS
-    print("   💻 PC环境 → 尝试使用本地JS生成W参数")
-    try:
-        from local_w_generator import LocalWGenerator
-        print("      ✅ LocalWGenerator加载成功（需要Node.js）")
-    except ImportError as e:
-        print(f"      ⚠️ LocalWGenerator加载失败: {e}")
-        print("      → 回退到远程API")
-        from android_w_generator import AndroidWGenerator as LocalWGenerator
+import torch
+from siamese_network import SiameseNetwork, get_transforms
+from local_w_generator import LocalWGenerator
 
 
 class GeetestHelperLocal:
     """Geetest 验证码助手（本地模型）"""
     
     def __init__(self,
-                 model_path: str = "best_siamese_model.onnx",
+                 model_path: str = "best_siamese_model.pth",
                  captcha_id: str = "045e2c229998a88721e32a763bc0f7b8",
                  threshold: float = 0.5,
                  js_file_path: str = None):
@@ -51,12 +28,12 @@ class GeetestHelperLocal:
         初始化
         
         Args:
-            model_path: ONNX模型文件路径
+            model_path: 模型文件路径
             captcha_id: Geetest的captcha_id
             threshold: 相似度阈值
             js_file_path: gcaptcha4_click.js 文件路径（可选）
         """
-        print("🔧 初始化 Geetest 验证器（ONNX模型 + 本地W参数）...")
+        print("🔧 初始化 Geetest 验证器（本地模型 + 本地W参数）...")
         
         self.captcha_id = captcha_id
         self.threshold = threshold
@@ -69,9 +46,26 @@ class GeetestHelperLocal:
             print(f"   请确保 jiyanv4/gcaptcha4_click.js 文件存在")
             raise
         
-        # 加载ONNX模型
-        print(f"   加载ONNX模型: {model_path}")
-        self.model = SiameseONNX(model_path)
+        # 加载模型
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print(f"   设备: {self.device}")
+        
+        self.model = SiameseNetwork(feature_dim=512)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+        
+        # 处理不同的checkpoint格式
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            accuracy = checkpoint.get('val_acc', 0) * 100
+            print(f"   模型准确率: {accuracy:.2f}%")
+        else:
+            self.model.load_state_dict(checkpoint)
+        
+        self.model.to(self.device)
+        self.model.eval()
+        
+        # 获取图片变换
+        _, self.transform = get_transforms()
         
         # Android 客户端请求头
         self.android_headers = {
@@ -117,8 +111,15 @@ class GeetestHelperLocal:
     def predict_similarity(self, question_img: Image.Image, candidate_img: Image.Image) -> float:
         """预测相似度"""
         try:
-            # ONNX推理
-            prob = self.model.predict(question_img, candidate_img)
+            # 转换为tensor
+            question_tensor = self.transform(question_img).unsqueeze(0).to(self.device)
+            candidate_tensor = self.transform(candidate_img).unsqueeze(0).to(self.device)
+            
+            # 推理
+            with torch.no_grad():
+                logits, _, _ = self.model(question_tensor, candidate_tensor)
+                prob = torch.sigmoid(logits).item()
+            
             return prob
         except Exception as e:
             print(f"   预测失败: {e}")
@@ -313,13 +314,13 @@ class GeetestHelperLocal:
 
 # 简化函数
 def quick_verify_local(phone_or_text: Optional[str] = None,
-                       model_path: str = "best_siamese_model.onnx") -> Optional[Dict]:
+                       model_path: str = "best_siamese_model.pth") -> Optional[Dict]:
     """
-    快速验证（ONNX模型）
+    快速验证（本地模型）
     
     Args:
         phone_or_text: 手机号或其他文本
-        model_path: ONNX模型文件路径
+        model_path: 模型文件路径
     
     Returns:
         验证结果字典或None
