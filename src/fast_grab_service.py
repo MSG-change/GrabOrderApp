@@ -84,7 +84,7 @@ class FastGrabOrderService:
         # 性能优化
         self.executor = ThreadPoolExecutor(max_workers=3)  # 线程池
         self.order_cache = {}  # 订单缓存（避免重复抢单）
-        self.cache_ttl = 60  # 缓存有效期（秒）
+        self.cache_ttl = 15  # 缓存有效期（秒）- 减少到15秒避免错过重试机会
         
         # 统计数据
         self.stats = {
@@ -326,10 +326,13 @@ class FastGrabOrderService:
             if order_id in self.order_cache:
                 cache_time = self.order_cache[order_id]
                 if current_time - cache_time < self.cache_ttl:
+                    # 打印为什么跳过
+                    time_left = self.cache_ttl - (current_time - cache_time)
+                    self.log(f"  [SKIP] Order {order_id} in cache (wait {time_left:.1f}s)")
                     continue  # 跳过已处理的订单
             
-            # 标记为已处理
-            self.order_cache[order_id] = current_time
+            # 不要在这里标记！应该在抢单后标记
+            # self.order_cache[order_id] = current_time
             new_orders.append(order)
         
         # 清理过期缓存
@@ -412,6 +415,8 @@ class FastGrabOrderService:
             if result.get('code') in [0, 200]:
                 self.stats['grab_success'] += 1
                 self.log(f"  [SUCCESS] Order {order_id} grabbed in {grab_time:.2f}s")
+                # 抢单成功后才缓存
+                self.order_cache[order_id] = time.time()
                 return True
             
             elif result.get('code') == 1001:
@@ -427,6 +432,9 @@ class FastGrabOrderService:
                 msg = result.get('msg', 'Unknown')
                 code = result.get('code', 'N/A')
                 self.log(f"  [FAILED] Order {order_id}: Code {code} - {msg}")
+                # 如果是"订单已被抢"或"订单不存在"才缓存，其他错误不缓存（可能需要重试）
+                if code in [500, 404, 400]:  # 根据实际错误码调整
+                    self.order_cache[order_id] = time.time()
                 return False
         
         except Exception as e:
@@ -516,9 +524,14 @@ class FastGrabOrderService:
             
             if result.get('code') == 200 or result.get('code') == 0:
                 self.log(f"  [SUCCESS] Captcha solved, order grabbed!")
+                # 验证码抢单成功后也要缓存
+                self.order_cache[order_id] = time.time()
                 return True
             else:
                 self.log(f"  [FAILED] Captcha solved but grab failed: {result.get('msg')}")
+                # 验证码失败根据错误码决定是否缓存
+                if result.get('code') in [500, 404, 400]:
+                    self.order_cache[order_id] = time.time()
                 return False
         
         except Exception as e:
