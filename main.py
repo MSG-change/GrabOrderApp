@@ -54,11 +54,13 @@ try:
     from src.smart_frida_service import SmartFridaService
     SmartFridaServiceClass = SmartFridaService
     SMART_FRIDA_AVAILABLE = True
+    FRIDA_MANAGER_AVAILABLE = True  # 添加这行
     log_print("✅ SmartFridaService imported successfully")
     log_print("ℹ️ Intelligent environment detection and service selection enabled")
 except Exception as e:
     log_print(f"⚠️ Smart Frida Service import failed: {e}")
     # Fallback to manual service selection
+    SMART_FRIDA_AVAILABLE = False
     FRIDA_MANAGER_AVAILABLE = False
     FridaServiceClass = None
 
