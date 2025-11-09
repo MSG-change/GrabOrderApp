@@ -96,9 +96,9 @@ class FastGrabOrderService:
             'avg_grab_time': [],
         }
         
-        self.log("✅ 快速抢单服务已初始化")
-        self.log(f"   API: {self.api_base_url}")
-        self.log(f"   检查间隔: {self.check_interval}秒")
+        self.log("[INIT] Fast grab service initialized")
+        self.log(f"  API: {self.api_base_url}")
+        self.log(f"  Check interval: {self.check_interval}s")
     
     def _create_optimized_session(self):
         """创建优化的 HTTP Session"""
@@ -151,7 +151,7 @@ class FastGrabOrderService:
                 header_key = key.replace('_', '-')
                 self.headers[header_key] = str(value)
         
-        self.log(f"🔄 Token 已更新: {self.token[:20] if self.token else 'None'}...")
+        self.log(f"[TOKEN] Updated: {self.token[:20] if self.token else 'None'}...")
         
         # 更新 Session headers
         self.session.headers.update(self.headers)
@@ -159,11 +159,11 @@ class FastGrabOrderService:
     def start(self):
         """启动抢单服务"""
         if self.running:
-            self.log("⚠️ 服务已在运行中")
+            self.log("[WARNING] Service already running")
             return False
         
         if not self.token:
-            self.log("❌ 未配置 Token，请先获取 Token")
+            self.log("[ERROR] Token not configured")
             return False
         
         self.running = True
@@ -185,7 +185,7 @@ class FastGrabOrderService:
         if self.executor:
             self.executor.shutdown(wait=False)
         
-        self.log("⏹️ 抢单服务已停止")
+        self.log("[STOPPED] Grab service stopped")
         self._print_stats()
     
     def _run_loop(self):
@@ -386,7 +386,7 @@ class FastGrabOrderService:
                 self._init_geetest()
             
             if not self.geetest_helper or not self.w_generator:
-                self.log("   ⚠️ Geetest 识别器不可用")
+                self.log("  [WARNING] Geetest solver not available")
                 return False
             
             # 执行 Geetest 验证
@@ -431,14 +431,14 @@ class FastGrabOrderService:
             result = response.json()
             
             if result.get('code') == 200:
-                self.log(f"   ✅ 验证通过，抢单成功！")
+                self.log(f"  [SUCCESS] Captcha solved, order grabbed!")
                 return True
             else:
-                self.log(f"   ❌ 验证通过但抢单失败: {result.get('msg')}")
+                self.log(f"  [FAILED] Captcha solved but grab failed: {result.get('msg')}")
                 return False
         
         except Exception as e:
-            self.log(f"   ❌ Geetest 验证异常: {e}")
+            self.log(f"  [ERROR] Geetest exception: {e}")
             return False
     
     def _init_geetest(self):
@@ -447,10 +447,10 @@ class FastGrabOrderService:
             return
         
         try:
-            self.log("🔧 初始化 Geetest 识别器...")
+            self.log("[INIT] Loading Geetest solver...")
             
             if not GEETEST_AVAILABLE or not W_GENERATOR_AVAILABLE:
-                self.log("⚠️ Geetest 模块不可用")
+                self.log("[WARNING] Geetest modules not available")
                 return
             
             # 确定模型路径
@@ -467,37 +467,37 @@ class FastGrabOrderService:
             self.w_generator = LocalWGenerator()
             
             self._geetest_initialized = True
-            self.log("✅ Geetest 识别器已加载")
+            self.log("[OK] Geetest solver loaded")
         
         except Exception as e:
-            self.log(f"⚠️ Geetest 加载失败: {e}")
+            self.log(f"[WARNING] Geetest load failed: {e}")
     
     def _get_order_id(self, order):
         """获取订单 ID"""
         return order.get('id') or order.get('orderId') or order.get('order_id')
     
     def _print_stats(self):
-        """打印统计信息"""
+        """Print statistics"""
         self.log("")
-        self.log("📊 运行统计")
+        self.log("[STATS] Service Statistics")
         self.log("-" * 50)
-        self.log(f"检查次数: {self.stats['checks']}")
-        self.log(f"发现订单: {self.stats['orders_found']}")
-        self.log(f"抢单尝试: {self.stats['grab_attempts']}")
-        self.log(f"  ├─ 成功: {self.stats['grab_success']}")
-        self.log(f"  └─ 失败: {self.stats['grab_failed']}")
+        self.log(f"Checks: {self.stats['checks']}")
+        self.log(f"Orders found: {self.stats['orders_found']}")
+        self.log(f"Grab attempts: {self.stats['grab_attempts']}")
+        self.log(f"  Success: {self.stats['grab_success']}")
+        self.log(f"  Failed: {self.stats['grab_failed']}")
         
         if self.stats['grab_attempts'] > 0:
             rate = self.stats['grab_success'] / self.stats['grab_attempts'] * 100
-            self.log(f"成功率: {rate:.1f}%")
+            self.log(f"Success rate: {rate:.1f}%")
         
         if self.stats['avg_check_time']:
             avg = sum(self.stats['avg_check_time']) / len(self.stats['avg_check_time'])
-            self.log(f"平均检查耗时: {avg:.2f}s")
+            self.log(f"Avg check time: {avg:.2f}s")
         
         if self.stats['avg_grab_time']:
             avg = sum(self.stats['avg_grab_time']) / len(self.stats['avg_grab_time'])
-            self.log(f"平均抢单耗时: {avg:.2f}s")
+            self.log(f"Avg grab time: {avg:.2f}s")
         
         self.log("-" * 50)
     
