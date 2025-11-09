@@ -156,6 +156,12 @@ class FastGrabOrderService:
         
         # 更新 Session headers
         self.session.headers.update(self.headers)
+        
+        # Log headers for verification
+        self.log(f"[HEADERS] authorization: {self.headers.get('authorization', 'NOT SET')[:30]}...")
+        self.log(f"[HEADERS] club-id: {self.headers.get('club-id', 'NOT SET')}")
+        self.log(f"[HEADERS] role-id: {self.headers.get('role-id', 'NOT SET')}")
+        self.log(f"[HEADERS] tenant-id: {self.headers.get('tenant-id', 'NOT SET')}")
     
     def start(self):
         """启动抢单服务"""
@@ -263,6 +269,11 @@ class FastGrabOrderService:
                 'userServerAreaId': ''
             }
             
+            # Check if token is set (only log once per 20 checks to avoid spam)
+            if self.stats['checks'] % 20 == 0:
+                auth_header = self.session.headers.get('authorization', 'NOT SET')
+                self.log(f"[DEBUG] Auth header: {auth_header[:40]}..." if len(auth_header) > 40 else f"[DEBUG] Auth header: {auth_header}")
+            
             response = self.session.get(url, params=params)
             
             # Log response status for debugging
@@ -354,6 +365,10 @@ class FastGrabOrderService:
             
             self.log(f"  [REQUEST] POST {url}")
             self.log(f"  [DATA] {data}")
+            
+            # Log current headers for debugging
+            auth_header = self.session.headers.get('authorization', 'NOT SET')
+            self.log(f"  [AUTH] {auth_header[:40]}..." if len(auth_header) > 40 else f"  [AUTH] {auth_header}")
             
             response = self.session.post(url, json=data)
             
