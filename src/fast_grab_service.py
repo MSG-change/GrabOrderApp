@@ -283,7 +283,8 @@ class FastGrabOrderService:
             
             data = response.json()
             
-            if data.get('code') == 200:
+            # API 返回 code=0 或 code=200 都表示成功
+            if data.get('code') in [0, 200]:
                 order_list = data.get('data', {})
                 if isinstance(order_list, dict):
                     return order_list.get('list', [])
@@ -369,11 +370,15 @@ class FastGrabOrderService:
             except:
                 order_id_int = order_id
             
-            data = {"orderId": order_id_int}
+            # 包含空的 geeDto 结构（即使不需要验证也要发送）
+            data = {
+                "orderId": order_id_int,
+                "geeDto": {}  # 空的 geeDto，让服务器决定是否需要验证
+            }
             
             self.log(f"[GRAB] Attempting to grab order: {order_id}")
             self.log(f"[REQUEST] POST {url}")
-            self.log(f"[DATA] orderId={order_id}")
+            self.log(f"[DATA] orderId={order_id}, geeDto={{}}")
             
             response = self.session.post(url, json=data)
             
