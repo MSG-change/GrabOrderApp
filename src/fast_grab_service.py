@@ -360,8 +360,15 @@ class FastGrabOrderService:
             
             # 直接抢单（跳过 Geetest 验证以提高速度）
             # 如果需要验证，会返回验证要求
-            url = f"{self.api_base_url}/gate/app-api/club/order/grabOrder"
-            data = {"orderId": order_id}
+            url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
+            
+            # Convert order_id to int
+            try:
+                order_id_int = int(order_id)
+            except:
+                order_id_int = order_id
+            
+            data = {"orderId": order_id_int}
             
             self.log(f"  [REQUEST] POST {url}")
             self.log(f"  [DATA] {data}")
@@ -391,7 +398,7 @@ class FastGrabOrderService:
             elif result.get('code') == 1001:
                 # Needs Geetest verification
                 self.log(f"  [CAPTCHA] Order {order_id} requires verification")
-                success = self._grab_with_geetest(order_id)
+                success = self._grab_with_geetest(order_id_int)
                 if success:
                     self.stats['grab_success'] += 1
                     return True
@@ -443,24 +450,52 @@ class FastGrabOrderService:
             if not w_param:
                 return False
             
-            verify_success = self.geetest_helper.verify_geetest(
+            # Get verification result
+            geetest_result = self.geetest_helper.verify_geetest(
                 lot_number=lot_number,
                 captcha_output=w_param,
                 pass_token=geetest_data['process_token'],
                 gen_time=int(time.time())
             )
             
-            if not verify_success:
+            if not geetest_result:
                 return False
             
-            # 验证通过后重新抢单
-            url = f"{self.api_base_url}/gate/app-api/club/order/grabOrder"
-            data = {"orderId": order_id}
+            # Build nested geeDto structure (matching working script)
+            gee_dto = {
+                'lotNumber': geetest_result.get('lot_number'),
+                'captchaOutput': geetest_result.get('captcha_output'),
+                'passToken': geetest_result.get('pass_token'),
+                'genTime': str(geetest_result.get('gen_time', int(time.time()))),
+                'captchaId': '045e2c229998a88721e32a763bc0f7b8',
+                'captchaKeyType': 'dlVerify'
+            }
             
-            response = self.session.post(url, json=data)
+            # Remove None values
+            gee_dto = {k: v for k, v in gee_dto.items() if v is not None}
+            
+            # Convert order_id to int
+            try:
+                order_id_int = int(order_id)
+            except:
+                order_id_int = order_id
+            
+            # Build payload with nested structure
+            payload = {
+                'orderId': order_id_int,
+                'geeDto': gee_dto
+            }
+            
+            # Send grab request with Geetest params
+            url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
+            
+            self.log(f"  [REQUEST] POST grabAnOrder/v1 with geeDto")
+            self.log(f"  [GEEDTO] lotNumber: {gee_dto.get('lotNumber', 'N/A')[:20]}...")
+            
+            response = self.session.post(url, json=payload)
             result = response.json()
             
-            if result.get('code') == 200:
+            if result.get('code') == 200 or result.get('code') == 0:
                 self.log(f"  [SUCCESS] Captcha solved, order grabbed!")
                 return True
             else:
