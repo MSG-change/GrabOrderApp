@@ -690,12 +690,12 @@ class MainScreen(BoxLayout):
             self._add_log_direct("[Step 2/2] Applying Token and Starting")
             self._add_log_direct("-" * 50)
             
-            self.grab_service.update_token(
-                token=manual_token,
-                club_id='236',
-                role_id='1329',
-                tenant_id='559'
-            )
+            self.grab_service.update_token({
+                'token': manual_token,
+                'club_id': '236',
+                'role_id': '1329',
+                'tenant_id': '559'
+            })
             
             self.grab_service.start()
             
