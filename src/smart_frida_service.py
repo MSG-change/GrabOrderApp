@@ -202,13 +202,13 @@ class EnvironmentDetector:
         """Determine the recommended Frida service based on environment"""
         env = self.environment_info
 
-        # Special handling for MuMu emulator
+        # Special handling for MuMu emulator - Use external Frida server approach
         if env['is_emulator'] and env['emulator_type'] == 'mumu':
-            self.log("MuMu emulator detected - using optimized service selection")
-            # For MuMu, prefer file-based service as Frida often has architecture issues
-            self.environment_info['recommended_service'] = 'FridaTokenServiceSimple'
+            self.log("MuMu emulator detected - using external Frida server approach")
+            # For MuMu, try external Frida server first, then APK service
+            self.environment_info['recommended_service'] = 'MuMuFridaService'
             self.environment_info['fallback_services'] = [
-                'FridaAPKService', 'FridaManager'
+                'FridaAPKService', 'FridaManager', 'FridaTokenServiceSimple'
             ]
             return
 
@@ -218,13 +218,13 @@ class EnvironmentDetector:
             if env['frida_available']:
                 self.environment_info['recommended_service'] = 'FridaAPKService'
                 self.environment_info['fallback_services'] = [
-                    'FridaTokenServiceSimple', 'FridaManager'
+                    'FridaManager', 'FridaTokenServiceSimple'
                 ]
             else:
-                # If Frida not available, use file-based service
-                self.environment_info['recommended_service'] = 'FridaTokenServiceSimple'
+                # Try external Frida server if internal Frida not available
+                self.environment_info['recommended_service'] = 'MuMuFridaService'
                 self.environment_info['fallback_services'] = [
-                    'FridaAPKService', 'FridaManager'
+                    'FridaAPKService', 'FridaManager', 'FridaTokenServiceSimple'
                 ]
             return
 
@@ -401,7 +401,15 @@ class SmartFridaService:
     def _create_service_instance(self, service_name: str):
         """Create service instance with proper configuration"""
         try:
-            if service_name == 'FridaAPKService':
+            if service_name == 'MuMuFridaService':
+                # MuMu专用服务 - 使用外部Frida server
+                from .mumu_frida_service import MuMuFridaService
+                return MuMuFridaService(
+                    target_package=self.target_package,
+                    log_callback=self._service_log_callback
+                )
+                
+            elif service_name == 'FridaAPKService':
                 from .frida_apk_service import FridaAPKService
                 return FridaAPKService(
                     target_package=self.target_package,
@@ -428,6 +436,10 @@ class SmartFridaService:
 
         except ImportError as e:
             self.log(f"Failed to import {service_name}: {e}")
+            # If MuMuFridaService not available, fall back to FridaAPKService
+            if service_name == 'MuMuFridaService':
+                self.log("MuMuFridaService not available, trying FridaAPKService")
+                return self._create_service_instance('FridaAPKService')
             return None
         except Exception as e:
             self.log(f"Failed to create {service_name}: {e}")
