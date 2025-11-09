@@ -287,8 +287,20 @@ class FastGrabOrderService:
             if data.get('code') in [0, 200]:
                 order_list = data.get('data', {})
                 if isinstance(order_list, dict):
-                    return order_list.get('list', [])
-                return order_list if isinstance(order_list, list) else []
+                    orders = order_list.get('list', [])
+                    if orders:
+                        self.log(f"[DEBUG] Found {len(orders)} orders in data.list")
+                        # 打印第一个订单的键，用于调试
+                        if orders and len(orders) > 0:
+                            self.log(f"[DEBUG] Order keys: {list(orders[0].keys())[:5]}...")
+                    return orders
+                elif isinstance(order_list, list):
+                    if order_list:
+                        self.log(f"[DEBUG] Found {len(order_list)} orders in data (list)")
+                    return order_list
+                else:
+                    self.log(f"[DEBUG] Unexpected data structure: {type(order_list)}")
+                    return []
             elif data.get('code') == 403:
                 self.log("[AUTH] Token expired, please update token")
                 return []
@@ -396,7 +408,8 @@ class FastGrabOrderService:
             self.stats['grab_attempts'] += 1
             self.stats['avg_grab_time'].append(grab_time)
             
-            if result.get('code') == 200:
+            # API 返回 code=0 或 code=200 都表示成功
+            if result.get('code') in [0, 200]:
                 self.stats['grab_success'] += 1
                 self.log(f"  [SUCCESS] Order {order_id} grabbed in {grab_time:.2f}s")
                 return True
@@ -545,7 +558,11 @@ class FastGrabOrderService:
     
     def _get_order_id(self, order):
         """获取订单 ID"""
-        return order.get('id') or order.get('orderId') or order.get('order_id')
+        # 尝试多种可能的字段名
+        order_id = order.get('id') or order.get('orderId') or order.get('order_id') or order.get('orderNo')
+        if not order_id:
+            self.log(f"[WARNING] Cannot find order ID in order data: {list(order.keys())}")
+        return order_id
     
     def _print_stats(self):
         """Print statistics"""
