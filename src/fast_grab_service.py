@@ -66,6 +66,7 @@ class FastGrabOrderService:
         
         # 创建优化的 Session（连接池 + 重试策略）
         self.session = self._create_optimized_session()
+        self.session.headers.update(self.headers)
         
         # Geetest 识别器（延迟加载）
         self.geetest_helper = None
@@ -263,6 +264,11 @@ class FastGrabOrderService:
             }
             
             response = self.session.get(url, params=params)
+            
+            # Log response status for debugging
+            if response.status_code != 200:
+                self.log(f"[DEBUG] HTTP {response.status_code}: {response.text[:100]}")
+            
             data = response.json()
             
             if data.get('code') == 200:
@@ -346,8 +352,17 @@ class FastGrabOrderService:
             url = f"{self.api_base_url}/gate/app-api/club/order/grabOrder"
             data = {"orderId": order_id}
             
+            self.log(f"  [REQUEST] POST {url}")
+            self.log(f"  [DATA] {data}")
+            
             response = self.session.post(url, json=data)
+            
+            # Log response for debugging
+            if response.status_code != 200:
+                self.log(f"  [DEBUG] HTTP {response.status_code}: {response.text[:100]}")
+            
             result = response.json()
+            self.log(f"  [RESPONSE] Code: {result.get('code')}, Msg: {result.get('msg', 'N/A')}")
             
             grab_time = time.time() - start_time
             self.stats['grab_attempts'] += 1
