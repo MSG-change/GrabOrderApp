@@ -415,12 +415,15 @@ class FastGrabOrderService:
             t2 = time.time()
             url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
             
-            # 确保 order_id 是字符串格式（API需要字符串，不是整数！）
-            order_id_str = str(order_id)
+            # 转换 order_id 为整数（curl证明API需要整数）
+            try:
+                order_id_int = int(order_id)
+            except:
+                order_id_int = order_id
             
             # 包含空的 geeDto 结构（即使不需要验证也要发送）
             data = {
-                "orderId": order_id_str,  # 使用字符串格式
+                "orderId": order_id_int,  # 使用整数格式
                 "geeDto": {}  # 空的 geeDto，让服务器决定是否需要验证
             }
             prep_time = (time.time() - t2) * 1000
@@ -428,7 +431,7 @@ class FastGrabOrderService:
             self.log(f"[GRAB] Attempting to grab order: {order_id}")
             self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms, Prep: {prep_time:.1f}ms")
             self.log(f"  [REQUEST] POST {url}")
-            self.log(f"  [DATA] orderId='{order_id_str}' (type: {type(order_id_str).__name__}), geeDto={{}}")
+            self.log(f"  [DATA] orderId={order_id_int} (type: {type(order_id_int).__name__}), geeDto={{}}")
             
             # 打印订单的其他关键字段，可能有用
             if 'orderNo' in order:
@@ -471,24 +474,35 @@ class FastGrabOrderService:
             elif result.get('code') == 1001:
                 # Needs Geetest verification
                 self.log(f"  [CAPTCHA] Order {order_id} requires verification")
-                success = self._grab_with_geetest(order_id_str)  # 传递字符串
+                success = self._grab_with_geetest(order_id_int)  # 传递整数
                 if success:
                     self.stats['grab_success'] += 1
                     return True
             
             else:
-                self.stats['grab_failed'] += 1
                 msg = result.get('msg', 'Unknown')
                 code = result.get('code', 'N/A')
-                self.log(f"  [FAILED] Order {order_id}: Code {code} - {msg}")
-                # Code 500 "订单不存在" - 可能是订单已被抢或ID格式错误
-                # 不缓存500错误，因为可能是ID问题而不是订单真的不存在
-                if code in [404, 400]:  # 只缓存明确的失败
-                    self.order_cache[order_id] = time.time()
-                elif code == 500:
-                    # 500错误可能是ID格式问题，不缓存，下次重试
-                    self.log(f"  [DEBUG] Code 500 - not caching, might be ID format issue")
-                return False
+                
+                # Code 500 "订单不存在" - 可能需要验证码
+                if code == 500 and "订单不存在" in msg:
+                    self.log(f"  [RETRY] Code 500 - Trying with Geetest verification")
+                    # 尝试使用验证码抢单
+                    success = self._grab_with_geetest(order_id_int)
+                    if success:
+                        self.stats['grab_success'] += 1
+                        return True
+                    else:
+                        self.stats['grab_failed'] += 1
+                        # 验证码也失败了，可能真的不存在
+                        self.order_cache[order_id] = time.time()
+                        return False
+                else:
+                    self.stats['grab_failed'] += 1
+                    self.log(f"  [FAILED] Order {order_id}: Code {code} - {msg}")
+                    # 其他错误码处理
+                    if code in [404, 400]:  # 只缓存明确的失败
+                        self.order_cache[order_id] = time.time()
+                    return False
         
         except Exception as e:
             self.stats['grab_failed'] += 1
@@ -554,12 +568,15 @@ class FastGrabOrderService:
             # Remove None values
             gee_dto = {k: v for k, v in gee_dto.items() if v is not None}
             
-            # 确保 order_id 是字符串
-            order_id_str = str(order_id)
+            # 转换 order_id 为整数
+            try:
+                order_id_int = int(order_id)
+            except:
+                order_id_int = order_id
             
             # Build payload with nested structure
             payload = {
-                'orderId': order_id_str,  # 使用字符串
+                'orderId': order_id_int,  # 使用整数
                 'geeDto': gee_dto
             }
             
