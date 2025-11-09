@@ -170,7 +170,9 @@ class FastGrabOrderService:
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
         
-        self.log("🚀 抢单服务已启动")
+        self.log("[STARTED] Grab service is running")
+        self.log(f"[INFO] Checking every {self.check_interval}s")
+        self.log(f"[INFO] Target category: {self.category_id}")
         return True
     
     def stop(self):
@@ -189,6 +191,7 @@ class FastGrabOrderService:
     def _run_loop(self):
         """主循环"""
         consecutive_errors = 0
+        check_count = 0  # Counter for heartbeat logging
         
         while self.running:
             try:
@@ -225,8 +228,11 @@ class FastGrabOrderService:
                     
                     consecutive_errors = 0
                 else:
-                    # No orders, silent to avoid spam
-                    pass
+                    # No orders - show heartbeat every 10 checks
+                    check_count += 1
+                    if check_count >= 10:
+                        self.log(f"[CHECKING] No orders (checked {self.stats['checks']} times)")
+                        check_count = 0
                 
                 # 动态调整检查间隔
                 if orders:
