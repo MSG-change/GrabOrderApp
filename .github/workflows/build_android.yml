@@ -55,24 +55,44 @@ jobs:
         pip install kivy==2.3.0
         pip install pillow requests numpy
     
-    - name: Download model from Release
+    - name: Download model from Private Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "📥 Downloading model file from GitHub Release..."
+        echo "📥 Downloading model file from Private GitHub Release..."
         
         # Configuration
         VERSION="v1.7.2"
         MODEL_FILE="best_siamese_model.pth"
         REPO="${{ github.repository }}"
         
-        # Try multiple download methods
-        echo "Method 1: Direct GitHub Release download..."
-        DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${MODEL_FILE}"
+        # Method 1: Use GitHub API with authentication for private release
+        echo "Downloading from private release using GitHub API..."
+        
+        # Get release information
+        RELEASE_INFO=$(curl -s \
+          -H "Authorization: token ${GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/${REPO}/releases/tags/${VERSION}")
+        
+        # Extract asset URL
+        ASSET_URL=$(echo "${RELEASE_INFO}" | grep -o '"browser_download_url": *"[^"]*best_siamese_model.pth"' | cut -d'"' -f4)
+        
+        if [ -z "${ASSET_URL}" ]; then
+          echo "⚠️ Could not find asset URL, trying direct download..."
+          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${MODEL_FILE}"
+        else
+          DOWNLOAD_URL="${ASSET_URL}"
+        fi
         
         if [ ! -f "${MODEL_FILE}" ]; then
           echo "Downloading from: ${DOWNLOAD_URL}"
           
-          # Method 1: curl with retries
-          curl -L -f --retry 3 --retry-delay 5 -o "${MODEL_FILE}" "${DOWNLOAD_URL}" || {
+          # Download with authentication header
+          curl -L -f --retry 3 --retry-delay 5 \
+            -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            -o "${MODEL_FILE}" "${DOWNLOAD_URL}" || {
             echo "curl failed, trying wget..."
             
             # Method 2: wget

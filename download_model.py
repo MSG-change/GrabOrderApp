@@ -43,7 +43,7 @@ def download_with_progress(url, filepath):
             print()  # 换行
 
 def download_model():
-    """下载模型文件"""
+    """下载模型文件（支持私有仓库）"""
     
     # GitHub Release配置
     GITHUB_OWNER = "MSG-change"
@@ -51,16 +51,56 @@ def download_model():
     VERSION = "v1.7.2"
     MODEL_FILENAME = "best_siamese_model.pth"
     
-    # 构建下载URL
-    MODEL_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/download/{VERSION}/{MODEL_FILENAME}"
+    # 检查是否有GitHub Token（用于私有仓库）
+    github_token = os.environ.get('GITHUB_TOKEN')
     
-    # 备用镜像地址（使用GitHub代理加速）
-    MIRROR_URLS = [
-        MODEL_URL,  # 原始地址
-        f"https://ghproxy.com/{MODEL_URL}",  # ghproxy镜像
-        f"https://mirror.ghproxy.com/{MODEL_URL}",  # 备用镜像
-        MODEL_URL.replace("github.com", "download.fastgit.org"),  # FastGit镜像
-    ]
+    if github_token:
+        print("🔐 使用GitHub Token访问私有Release...")
+        
+        # 使用API获取私有Release资产
+        headers = {
+            'Authorization': f'token {github_token}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
+        
+        # 获取Release信息
+        api_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tags/{VERSION}"
+        response = requests.get(api_url, headers=headers)
+        
+        if response.status_code == 200:
+            release_data = response.json()
+            assets = release_data.get('assets', [])
+            
+            # 找到模型文件
+            for asset in assets:
+                if asset['name'] == MODEL_FILENAME:
+                    MODEL_URL = asset['url']
+                    
+                    # 使用API下载（需要特殊header）
+                    download_headers = {
+                        'Authorization': f'token {github_token}',
+                        'Accept': 'application/octet-stream'
+                    }
+                    
+                    MIRROR_URLS = [MODEL_URL]  # 私有仓库只用直接URL
+                    break
+            else:
+                print("⚠️  在Release中未找到模型文件")
+                MODEL_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/download/{VERSION}/{MODEL_FILENAME}"
+                MIRROR_URLS = [MODEL_URL]
+        else:
+            print(f"⚠️  无法访问私有Release: {response.status_code}")
+            MODEL_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/download/{VERSION}/{MODEL_FILENAME}"
+            MIRROR_URLS = [MODEL_URL]
+    else:
+        print("📥 尝试公开访问（如果仓库是私有的将失败）...")
+        # 构建下载URL
+        MODEL_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/download/{VERSION}/{MODEL_FILENAME}"
+        
+        # 备用镜像地址（仅对公开仓库有效）
+        MIRROR_URLS = [
+            MODEL_URL,  # 原始地址
+        ]
     
     MODEL_PATH = "best_siamese_model.pth"
     MODEL_SIZE = 144114997  # 137.44 MB
@@ -83,17 +123,45 @@ def download_model():
     
     # 尝试从多个镜像下载
     for i, url in enumerate(MIRROR_URLS, 1):
-        print(f"尝试源 {i}/{len(MIRROR_URLS)}: {url[:50]}...")
+        print(f"尝试源 {i}/{len(MIRROR_URLS)}...")
         
         try:
+            # 准备请求headers（如果有token）
+            headers = {}
+            if github_token and 'api.github.com' in url:
+                headers = {
+                    'Authorization': f'token {github_token}',
+                    'Accept': 'application/octet-stream'
+                }
+            
             # 先测试连接
-            test_response = requests.head(url, timeout=5, allow_redirects=True)
+            test_response = requests.head(url, headers=headers, timeout=5, allow_redirects=True)
             if test_response.status_code == 404:
                 print(f"   ❌ 文件不存在 (404)")
                 continue
+            elif test_response.status_code == 401:
+                print(f"   ❌ 未授权 (401) - 需要有效的GitHub Token")
+                continue
                 
-            # 开始下载
-            download_with_progress(url, MODEL_PATH)
+            # 开始下载（传递headers）
+            if headers:
+                response = requests.get(url, headers=headers, stream=True)
+                response.raise_for_status()
+                
+                total_size = int(response.headers.get('content-length', 0))
+                
+                with open(MODEL_PATH, 'wb') as f:
+                    downloaded = 0
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                percent = (downloaded / total_size) * 100
+                                print(f"\r下载进度: {percent:.1f}% ({downloaded}/{total_size} bytes)", end='')
+                print()  # 换行
+            else:
+                download_with_progress(url, MODEL_PATH)
             
             # 验证文件大小
             file_size = os.path.getsize(MODEL_PATH)
