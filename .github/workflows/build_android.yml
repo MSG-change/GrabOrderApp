@@ -1,0 +1,228 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-pip \
+          build-essential \
+          git \
+          python3-dev \
+          ffmpeg \
+          libsdl2-dev \
+          libsdl2-image-dev \
+          libsdl2-mixer-dev \
+          libsdl2-ttf-dev \
+          libportmidi-dev \
+          libswscale-dev \
+          libavformat-dev \
+          libavcodec-dev \
+          zlib1g-dev \
+          libgstreamer1.0-dev \
+          gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good \
+          openjdk-11-jdk \
+          unzip \
+          zip
+    
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip setuptools wheel
+        pip install cython==0.29.33
+        pip install buildozer==1.5.0
+        pip install kivy==2.3.0
+        pip install pillow requests numpy
+    
+    - name: Download model from Release
+      run: |
+        echo "📥 Downloading model file from GitHub Release..."
+        
+        # Configuration
+        VERSION="v1.7.2"
+        MODEL_FILE="best_siamese_model.pth"
+        REPO="${{ github.repository }}"
+        
+        # Try multiple download methods
+        echo "Method 1: Direct GitHub Release download..."
+        DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${MODEL_FILE}"
+        
+        if [ ! -f "${MODEL_FILE}" ]; then
+          echo "Downloading from: ${DOWNLOAD_URL}"
+          
+          # Method 1: curl with retries
+          curl -L -f --retry 3 --retry-delay 5 -o "${MODEL_FILE}" "${DOWNLOAD_URL}" || {
+            echo "curl failed, trying wget..."
+            
+            # Method 2: wget
+            wget -O "${MODEL_FILE}" "${DOWNLOAD_URL}" || {
+              echo "wget failed, trying Python script..."
+              
+              # Method 3: Python download script
+              python download_model.py || {
+                echo "⚠️  Could not download model file"
+                echo "The app will build but may not work properly without the model"
+              }
+            }
+          }
+        fi
+        
+        # Verify file
+        if [ -f "${MODEL_FILE}" ]; then
+          FILE_SIZE=$(stat -c%s "${MODEL_FILE}" 2>/dev/null || stat -f%z "${MODEL_FILE}" 2>/dev/null || echo "0")
+          echo "✅ Model file exists: ${FILE_SIZE} bytes"
+          
+          # Expected size: 144114997 bytes (137.44 MB)
+          if [ "${FILE_SIZE}" -eq "144114997" ]; then
+            echo "✅ File size is correct"
+          else
+            echo "⚠️  File size mismatch: ${FILE_SIZE} != 144114997"
+          fi
+        else
+          echo "❌ Model file not found after download attempts"
+        fi
+    
+    - name: Setup Android SDK
+      run: |
+        # Buildozer will download Android SDK/NDK automatically
+        # But we can pre-accept licenses
+        mkdir -p ~/.buildozer/android/platform
+        echo "Android SDK will be downloaded by buildozer"
+    
+    - name: Build APK with Buildozer
+      run: |
+        echo "🔨 Building APK..."
+        
+        # Clean previous builds (optional)
+        rm -rf .buildozer/android/app || true
+        
+        # Build debug APK
+        yes | buildozer android debug || {
+          echo "Build failed, checking logs..."
+          if [ -f .buildozer/logs/last_build.txt ]; then
+            echo "=== Last Build Log ==="
+            tail -n 100 .buildozer/logs/last_build.txt
+          fi
+          exit 1
+        }
+        
+        echo "✅ Build completed"
+        
+        # List APK files
+        echo "Generated APK files:"
+        ls -la bin/*.apk || echo "No APK files found in bin/"
+    
+    - name: Upload APK as Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: GrabOrderApp-APK-${{ github.sha }}
+        path: bin/*.apk
+        if-no-files-found: error
+    
+    - name: Upload to Release (if tagged)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: bin/*.apk
+        body: |
+          ## 📱 GrabOrderApp ${{ github.ref_name }}
+          
+          ### ✨ Features
+          - 🔐 Nine-grid verification system with Siamese model
+          - 🚀 Automatic order grabbing
+          - 📊 Real-time logging
+          - 🔧 Optimized performance
+          
+          ### 📥 Installation
+          1. Download the APK file below
+          2. Enable "Install from Unknown Sources" in Android settings
+          3. Install the APK
+          4. Grant necessary permissions when prompted
+          
+          ### 🔑 Required Setup
+          - Token authentication
+          - Club ID, Role ID, Tenant ID configuration
+          - Category ID for order filtering
+          
+          ### ⚠️ Important Notes
+          - This version includes forced nine-grid verification
+          - Model file (137MB) is embedded in the APK
+          - Requires Android 5.0+ (API 21+)
+          
+          ### 🐛 Bug Fixes
+          - Fixed 500 error on order grab
+          - Improved cache mechanism
+          - Enhanced error handling
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Comment on PR (if PR)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Find APK files
+          const binDir = './bin';
+          let apkFiles = [];
+          
+          if (fs.existsSync(binDir)) {
+            apkFiles = fs.readdirSync(binDir)
+              .filter(file => file.endsWith('.apk'))
+              .map(file => {
+                const stats = fs.statSync(path.join(binDir, file));
+                return `- ${file} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`;
+              });
+          }
+          
+          const comment = `## 🚀 APK Build Successful!
+          
+          ### 📱 Build Information
+          - **Commit:** ${context.sha.substring(0, 7)}
+          - **Build Number:** ${context.runNumber}
+          - **Status:** ✅ Success
+          
+          ### 📦 Generated APKs
+          ${apkFiles.length > 0 ? apkFiles.join('\n') : '❌ No APK files found'}
+          
+          ### 📥 Download
+          You can download the APK from the [Actions artifacts](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).
+          
+          ### 🧪 Testing
+          1. Download the APK
+          2. Install on Android device
+          3. Test nine-grid verification
+          4. Verify order grabbing works
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
