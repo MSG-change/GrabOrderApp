@@ -35,3 +35,4 @@ env/
 # Temporary files
 *.tmp
 *.bak
+best_siamese_model.pth
