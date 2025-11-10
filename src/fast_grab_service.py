@@ -310,7 +310,7 @@ class FastGrabOrderService:
                     # No orders - show heartbeat every 10 checks
                     check_count += 1
                     if check_count >= 10:
-                        self.log(f"[CHECKING] No orders (checked {self.stats['checks']} times)")
+                        self.log(f"[CHECKING] No orders (checked {self.stats['checks']} times)", force=True)
                         check_count = 0
                 
                 # 动态调整检查间隔
@@ -341,17 +341,11 @@ class FastGrabOrderService:
                 'userServerAreaId': ''
             }
             
-            # Log every request
-            self.log(f"[REQUEST] GET {url}?productCategoryParentId={self.category_id}")
+            response = self.session.get(url, params=params, timeout=5)
             
-            response = self.session.get(url, params=params)
-            
-            # Log response
-            self.log(f"[RESPONSE] Status: {response.status_code}")
-            
-            # Log response status for debugging
+            # Log response status (force in instant mode for debugging)
             if response.status_code != 200:
-                self.log(f"[DEBUG] HTTP {response.status_code}: {response.text[:100]}")
+                self.log(f"[ERROR] HTTP {response.status_code}: {response.text[:100]}", force=True)
             
             data = response.json()
             
@@ -393,8 +387,17 @@ class FastGrabOrderService:
                 self.log(f"[API] Error code {data.get('code')}: {msg}")
                 return []
         
+        except requests.exceptions.Timeout:
+            self.log("[ERROR] Request timeout (5s)", force=True)
+            return []
+        except requests.exceptions.RequestException as e:
+            self.log(f"[ERROR] Network error: {str(e)}", force=True)
+            return []
         except Exception as e:
-            raise Exception(f"Failed to get orders: {str(e)}")
+            self.log(f"[ERROR] Failed to get orders: {str(e)}", force=True)
+            import traceback
+            self.log(f"[ERROR] Traceback: {traceback.format_exc()[:200]}", force=True)
+            return []
     
     def _filter_new_orders(self, orders):
         """过滤新订单（避免重复抢单）"""
@@ -469,13 +472,13 @@ class FastGrabOrderService:
             t1 = time.time()
             order_id = self._get_order_id(order)
             if not order_id:
-                self.log(f"[ERROR] Failed to get order ID from order: {order}")
+                self.log(f"[ERROR] Failed to get order ID from order: {order}", force=True)
                 return False
             id_time = (time.time() - t1) * 1000
             
             order_id_str = str(order_id)
             
-            self.log(f"[GRAB] Attempting to grab order: {order_id}")
+            self.log(f"[GRAB] Attempting to grab order: {order_id}", force=True)
             self.log(f"  [TIMING] ID extraction: {id_time:.1f}ms")
             
             # 打印订单的其他关键字段
@@ -496,18 +499,18 @@ class FastGrabOrderService:
                 self.stats['grab_success'] += 1
                 self.stats['grab_attempts'] += 1
                 self.stats['avg_grab_time'].append(total_time / 1000)
-                self.log(f"  [SUCCESS] Order {order_id} grabbed in {total_time:.1f}ms")
+                self.log(f"  [SUCCESS] Order {order_id} grabbed in {total_time:.1f}ms", force=True)
                 self.order_cache[order_id] = time.time()
                 return True
             else:
                 self.stats['grab_failed'] += 1
                 self.stats['grab_attempts'] += 1
-                self.log(f"  [FAILED] Order {order_id} failed in {total_time:.1f}ms")
+                self.log(f"  [FAILED] Order {order_id} failed in {total_time:.1f}ms", force=True)
                 return False
         
         except Exception as e:
             self.stats['grab_failed'] += 1
-            self.log(f"  [ERROR] Grab exception: {str(e)}")
+            self.log(f"  [ERROR] Grab exception: {str(e)}", force=True)
             return False
     
     def _grab_with_geetest(self, order_id):
@@ -550,12 +553,12 @@ class FastGrabOrderService:
             self.log(f"  [GEETEST] Verification time: {verify_time:.1f}ms")
             
             if not geetest_result or not geetest_result.get('success'):
-                self.log(f"  [GEETEST] ❌ Verification failed")
+                self.log(f"  [GEETEST] ❌ Verification FAILED", force=True)
                 if geetest_result:
-                    self.log(f"  [GEETEST] Error: {geetest_result.get('error', 'Unknown')}")
+                    self.log(f"  [GEETEST] Error: {geetest_result.get('error', 'Unknown')}", force=True)
                 return False
             
-            self.log(f"  [GEETEST] ✅ Verification successful")
+            self.log(f"  [GEETEST] ✅ Verification SUCCESS", force=True)
             self.log(f"  [GEETEST] Recognized answers: {geetest_result.get('answers', [])}")
             
             # 详细检查返回的参数
@@ -586,13 +589,13 @@ class FastGrabOrderService:
             missing_params = []
             if not gee_dto.get('lotNumber'):
                 missing_params.append('lotNumber')
-                self.log(f"    ❌ lotNumber: MISSING")
+                self.log(f"    ❌ lotNumber: MISSING", force=True)
             else:
                 self.log(f"    ✅ lotNumber: {gee_dto['lotNumber'][:30]}...")
             
             if not gee_dto.get('captchaOutput'):
                 missing_params.append('captchaOutput')
-                self.log(f"    ❌ captchaOutput: MISSING")
+                self.log(f"    ❌ captchaOutput: MISSING", force=True)
             else:
                 w_len = len(gee_dto['captchaOutput'])
                 self.log(f"    ✅ captchaOutput: {w_len} chars")
@@ -602,7 +605,7 @@ class FastGrabOrderService:
             
             if not gee_dto.get('passToken'):
                 missing_params.append('passToken')
-                self.log(f"    ❌ passToken: MISSING")
+                self.log(f"    ❌ passToken: MISSING", force=True)
             else:
                 self.log(f"    ✅ passToken: {gee_dto['passToken'][:30]}...")
             
@@ -611,7 +614,7 @@ class FastGrabOrderService:
             self.log(f"    ✅ captchaKeyType: {gee_dto.get('captchaKeyType')}")
             
             if missing_params:
-                self.log(f"  [GEEDTO] ❌ Missing required params: {', '.join(missing_params)}")
+                self.log(f"  [GEEDTO] ❌ Missing required params: {', '.join(missing_params)}", force=True)
                 return False
             
             # ============================================================
@@ -647,19 +650,19 @@ class FastGrabOrderService:
                 result = response.json()
                 self.log(f"  [RESPONSE] Response body: {result}")
             except Exception as e:
-                self.log(f"  [RESPONSE] ❌ Parse failed: {e}")
-                self.log(f"  [RESPONSE] Raw response: {response.text[:200]}")
+                self.log(f"  [RESPONSE] ❌ Parse FAILED: {e}", force=True)
+                self.log(f"  [RESPONSE] Raw response: {response.text[:200]}", force=True)
                 return False
             
             if result.get('code') == 200 or result.get('code') == 0:
-                self.log(f"  [SUCCESS] ✅ Order grabbed successfully!")
+                self.log(f"  [SUCCESS] ✅ Order grabbed successfully!", force=True)
                 self.log(f"  [SUCCESS] Response message: {result.get('msg', 'N/A')}")
                 self.order_cache[order_id] = time.time()
                 return True
             else:
-                self.log(f"  [FAILED] ❌ Grab failed")
-                self.log(f"  [FAILED] Error code: {result.get('code')}")
-                self.log(f"  [FAILED] Error message: {result.get('msg')}")
+                self.log(f"  [FAILED] ❌ Grab FAILED", force=True)
+                self.log(f"  [FAILED] Error code: {result.get('code')}", force=True)
+                self.log(f"  [FAILED] Error message: {result.get('msg')}", force=True)
                 self.log(f"  [FAILED] Full response: {result}")
                 
                 # 特定错误码标记缓存
@@ -670,7 +673,9 @@ class FastGrabOrderService:
                 return False
         
         except Exception as e:
-            self.log(f"  [ERROR] Geetest exception: {e}")
+            self.log(f"  [ERROR] Geetest exception: {e}", force=True)
+            import traceback
+            self.log(f"  [ERROR] Traceback: {traceback.format_exc()[:300]}", force=True)
             return False
     
     def _preload_verification(self):
@@ -832,16 +837,23 @@ class FastGrabOrderService:
         self.log("-" * 50)
     
     def log(self, message, force=False):
-        """日志输出（秒抢模式下减少日志）"""
+        """Log output (reduced logs in instant mode)"""
         if self.skip_logs and not force:
-            # 秒抢模式只输出重要日志
-            if any(keyword in message for keyword in ['成功', '失败', '错误', '启动', '停止', '秒抢']):
-                pass  # 输出
+            # In instant mode, only output important logs
+            important_keywords = [
+                # English keywords
+                'SUCCESS', 'FAILED', 'ERROR', 'WARNING', 'FOUND', 'GRABBED',
+                'STARTED', 'STOPPED', 'INSTANT', 'GEETEST',
+                # Chinese keywords (for compatibility)
+                '成功', '失败', '错误', '启动', '停止', '秒抢'
+            ]
+            if any(keyword in message for keyword in important_keywords):
+                pass  # Output
             else:
-                return  # 跳过
+                return  # Skip
         
         if self.log_callback:
-            # 确保时间格式一致
+            # Ensure consistent time format
             timestamp = time.strftime('%H:%M:%S', time.localtime())
             self.log_callback(f"[{timestamp}] {message}")
         else:
