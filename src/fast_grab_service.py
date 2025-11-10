@@ -92,6 +92,7 @@ class FastGrabOrderService:
         # 预验证缓存（加强版）
         self.verification_queue = []  # 预生成的验证缓存
         self.max_cache_size = 20  # 最多缓存20个验证
+        self.verification_ttl = 90  # 验证缓存有效期：90秒（通用安全值）
         
         # 秒抢模式
         self.instant_mode = True  # 启用秒抢模式
@@ -693,13 +694,20 @@ class FastGrabOrderService:
     def _get_cached_verification(self):
         """获取缓存的验证（如果有）"""
         if self.verification_queue:
-            # 检查最老的缓存
-            if time.time() - self.verification_queue[0]['time'] < 30:  # 30秒内有效
+            # 检查最老的缓存是否过期
+            age = time.time() - self.verification_queue[0]['time']
+            
+            if age < self.verification_ttl:  # 使用配置的TTL
                 cached = self.verification_queue.pop(0)
-                self.log("[VERIFY] 使用缓存验证 ⚡")
+                self.log(f"[VERIFY] 使用缓存验证 ⚡ (age: {age:.1f}s)", force=True)
                 # 触发新的预加载
                 self.executor.submit(self._preload_verification)
                 return cached['result']
+            else:
+                # 过期了，移除并尝试下一个
+                self.log(f"[VERIFY] 缓存过期 ({age:.1f}s > {self.verification_ttl}s)")
+                self.verification_queue.pop(0)
+                return self._get_cached_verification()  # 递归检查下一个
         return None
     
     def _init_geetest(self):
