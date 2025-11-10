@@ -210,15 +210,12 @@ class GeetestHelperLocal:
             try:
                 print(f"   🌐 使用远程AI服务: {ai_server_url}")
                 
-                # 构造图片URL
-                question_url = f"https://gcaptcha4.geetest.com/load?captcha_id={self.captcha_id}&challenge={challenge}&client_type=web&lang=zh"
-                grid_url = f"https://gcaptcha4.geetest.com/pictures/gt/{challenge}/bg/{challenge}.jpg"
-                
+                # 使用新的简化API - 直接传入captcha_id和challenge
                 response = requests.post(
                     f"{ai_server_url}/api/recognize",
                     json={
-                        'question_url': question_url,
-                        'grid_url': grid_url,
+                        'captcha_id': self.captcha_id,
+                        'challenge': challenge,
                         'threshold': self.threshold
                     },
                     timeout=30
