@@ -82,16 +82,20 @@ class FastGrabOrderService:
         config_mgr = ConfigManager()
         config = config_mgr.load_config()
         self.category_id = config.get('category_id', '131')  # 使用配置中的值，默认131（考核单）
-        self.check_interval = config.get('check_interval', 0.5)  # 检查间隔（秒）- 优化为0.5秒
+        self.check_interval = config.get('check_interval', 0.1)  # 检查间隔（秒）- 秒抢模式100ms
         
-        # 性能优化（增强版）
-        self.executor = ThreadPoolExecutor(max_workers=10)  # 线程池 - 增加到10个
+        # 性能优化（极速版）
+        self.executor = ThreadPoolExecutor(max_workers=20)  # 线程池 - 增加到20个
         self.order_cache = {}  # 订单缓存（避免重复抢单）
         self.cache_ttl = 15  # 缓存有效期（秒）- 减少到15秒避免错过重试机会
         
-        # 预验证缓存（新增）
+        # 预验证缓存（加强版）
         self.verification_queue = []  # 预生成的验证缓存
-        self.max_cache_size = 5  # 最多缓存5个验证
+        self.max_cache_size = 20  # 最多缓存20个验证
+        
+        # 秒抢模式
+        self.instant_mode = True  # 启用秒抢模式
+        self.skip_logs = True  # 跳过详细日志（提速）
         
         # 统计数据
         self.stats = {
@@ -202,15 +206,23 @@ class FastGrabOrderService:
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
         
-        # 启动预加载（后台）
-        for _ in range(3):  # 预加载3个验证
+        # 启动预加载（后台）- 秒抢模式加载更多
+        preload_count = 10 if self.instant_mode else 3
+        for _ in range(preload_count):  # 预加载10个验证
             self.executor.submit(self._preload_verification)
         
-        self.log("[STARTED] Grab service is running")
-        self.log(f"  Check interval: {self.check_interval}s")
-        self.log(f"  Category ID: {self.category_id}")
-        self.log(f"  预加载验证: 启用")
-        self.log(f"  并发线程: {self.executor._max_workers}")
+        if self.instant_mode:
+            self.log("⚡⚡⚡ 秒抢模式已启动", force=True)
+            self.log(f"  检查间隔: {self.check_interval*1000:.0f}ms", force=True)
+            self.log(f"  并发线程: {self.executor._max_workers}", force=True)
+            self.log(f"  预加载缓存: {self.max_cache_size}个", force=True)
+            self.log(f"  目标速度: <1秒", force=True)
+        else:
+            self.log("[STARTED] Grab service is running")
+            self.log(f"  Check interval: {self.check_interval}s")
+            self.log(f"  Category ID: {self.category_id}")
+            self.log(f"  预加载验证: 启用")
+            self.log(f"  并发线程: {self.executor._max_workers}")
         return True
     
     def stop(self):
@@ -767,10 +779,19 @@ class FastGrabOrderService:
         
         self.log("-" * 50)
     
-    def log(self, message):
-        """输出日志"""
+    def log(self, message, force=False):
+        """日志输出（秒抢模式下减少日志）"""
+        if self.skip_logs and not force:
+            # 秒抢模式只输出重要日志
+            if any(keyword in message for keyword in ['成功', '失败', '错误', '启动', '停止', '秒抢']):
+                pass  # 输出
+            else:
+                return  # 跳过
+        
         if self.log_callback:
-            self.log_callback(message)
+            # 确保时间格式一致
+            timestamp = time.strftime('%H:%M:%S', time.localtime())
+            self.log_callback(f"[{timestamp}] {message}")
         else:
             timestamp = datetime.now().strftime("%H:%M:%S")
             print(f"[{timestamp}] {message}")
