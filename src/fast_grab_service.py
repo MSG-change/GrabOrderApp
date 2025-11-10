@@ -337,25 +337,56 @@ class FastGrabOrderService:
         
         self.running = True
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
-        self.thread.start()
-        
         # 🚀 启动智能预加载（后台）- 秒抢模式加载更多
         if self.preload_enabled:
             preload_count = 10 if self.instant_mode else 3
-            for _ in range(preload_count):  # 预加载识别结果
-                self.executor.submit(self._preload_recognition)
+            
+            if self.instant_mode:
+                self.log("⚡⚡⚡ Instant Grab Mode Initializing...", force=True)
+            else:
+                self.log("[INIT] Initializing grab service...")
+            
+            self.log(f"  Preloading {preload_count} recognition results...", force=True)
+            
+            # 提交预加载任务
+            preload_futures = []
+            for i in range(preload_count):
+                future = self.executor.submit(self._preload_recognition)
+                preload_futures.append(future)
+            
+            # 等待缓存预加载完成
+            self.log(f"  Waiting for cache to build...", force=True)
+            import concurrent.futures
+            completed = 0
+            for i, future in enumerate(concurrent.futures.as_completed(preload_futures, timeout=60)):
+                try:
+                    future.result()
+                    completed += 1
+                    if completed % 3 == 0 or completed == preload_count:
+                        self.log(f"  [CACHE] Preloaded {completed}/{preload_count} recognition results", force=True)
+                except Exception as e:
+                    self.log(f"  [CACHE] Preload task {i+1} failed: {e}")
+            
+            cache_size = len(self.recognition_cache)
+            if cache_size > 0:
+                self.log(f"  ✅ Cache ready: {cache_size} recognition results loaded", force=True)
+            else:
+                self.log(f"  ⚠️  Warning: Cache is empty, will use real-time verification", force=True)
+        
+        # 启动主循环线程
+        self.thread.start()
         
         if self.instant_mode:
             self.log("⚡⚡⚡ Instant Grab Mode Started", force=True)
             self.log(f"  Check interval: {self.check_interval*1000:.0f}ms", force=True)
             self.log(f"  Concurrent threads: {self.executor._max_workers}", force=True)
-            self.log(f"  Recognition cache: {self.max_recognition_cache} items (saves ~1000ms/order)", force=True)
+            self.log(f"  Recognition cache: {len(self.recognition_cache)}/{self.max_recognition_cache} items ready", force=True)
             self.log(f"  Target speed: <1s", force=True)
         else:
             self.log("[STARTED] Grab service is running")
             self.log(f"  Check interval: {self.check_interval}s")
             self.log(f"  Category ID: {self.category_id}")
-            self.log(f"  Preload verification: Enabled")
+            self.log(f"  Recognition cache: {len(self.recognition_cache)} items ready")
             self.log(f"  Concurrent threads: {self.executor._max_workers}")
         return True
     
@@ -832,43 +863,36 @@ class FastGrabOrderService:
     # ========================================================================
     
     def _preload_recognition(self):
-        """后台预加载识别结果（智能缓存）"""
+        """后台预加载识别结果（智能缓存）- 同步版本"""
         try:
             if not self.preload_enabled:
-                return
+                return False
             
             if len(self.recognition_cache) >= self.max_recognition_cache:
-                return  # 缓存已满
+                return False  # 缓存已满
             
             if not hasattr(self, 'geetest_helper') or not self.geetest_helper:
-                return
+                return False
             
             # 只获取AI识别结果，不生成W参数
             import uuid
             temp_challenge = str(uuid.uuid4())
             
-            # 异步识别
-            future = self.executor.submit(
-                self._recognize_only,
-                temp_challenge
-            )
-            
-            def cache_recognition(f):
-                try:
-                    result = f.result(timeout=10)
-                    if result and result.get('success'):
-                        self.recognition_cache.append({
-                            'answers': result.get('answers'),
-                            'image_hash': result.get('image_hash'),  # 图片指纹
-                            'time': time.time()
-                        })
-                        self.log(f"[CACHE] Preloaded recognition {len(self.recognition_cache)}/{self.max_recognition_cache}")
-                except Exception as e:
-                    self.log(f"[CACHE] Preload failed: {e}")
-            
-            future.add_done_callback(cache_recognition)
+            # 同步识别并添加到缓存
+            result = self._recognize_only(temp_challenge)
+            if result and result.get('success'):
+                self.recognition_cache.append({
+                    'answers': result.get('answers'),
+                    'image_hash': result.get('image_hash'),  # 图片指纹
+                    'time': time.time()
+                })
+                return True
+            else:
+                return False
+                
         except Exception as e:
             self.log(f"[CACHE] Preload exception: {e}")
+            return False
     
     def _recognize_only(self, challenge):
         """仅执行AI识别，不生成W参数"""
