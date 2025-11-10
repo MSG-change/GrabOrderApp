@@ -11,32 +11,52 @@ import hashlib
 from typing import Optional, Dict, List
 from PIL import Image
 import io
-from siamese_onnx import SiameseONNX
+
+# 条件导入本地模型（仅在未配置远程AI时需要）
+try:
+    from siamese_onnx import SiameseONNX
+    ONNX_AVAILABLE = True
+except ImportError:
+    ONNX_AVAILABLE = False
+    SiameseONNX = None
 
 # 根据环境选择W参数生成器
 import os
 is_android = os.path.exists('/data/data') or os.path.exists('/system/bin/app_process')
+
+LocalWGenerator = None
+W_GENERATOR_AVAILABLE = False
 
 if is_android:
     # Android环境：使用本地 WebView 方案
     print("   🤖 Android环境 → 使用本地 WebView 生成W参数")
     try:
         from android_local_w_generator import AndroidLocalWGenerator as LocalWGenerator
+        W_GENERATOR_AVAILABLE = True
         print("      ✅ AndroidLocalWGenerator 加载成功")
     except ImportError as e:
         print(f"      ⚠️ AndroidLocalWGenerator 加载失败: {e}")
-        print("      → 回退到远程API")
-        from android_w_generator import AndroidWGenerator as LocalWGenerator
+        try:
+            from android_w_generator import AndroidWGenerator as LocalWGenerator
+            W_GENERATOR_AVAILABLE = True
+            print("      ✅ AndroidWGenerator 加载成功")
+        except ImportError:
+            print("      ⚠️ 所有 Android W生成器都不可用")
 else:
     # PC环境：尝试使用本地JS
     print("   💻 PC环境 → 尝试使用本地JS生成W参数")
     try:
         from local_w_generator import LocalWGenerator
+        W_GENERATOR_AVAILABLE = True
         print("      ✅ LocalWGenerator加载成功（需要Node.js）")
     except ImportError as e:
         print(f"      ⚠️ LocalWGenerator加载失败: {e}")
-        print("      → 回退到远程API")
-        from android_w_generator import AndroidWGenerator as LocalWGenerator
+        try:
+            from android_w_generator import AndroidWGenerator as LocalWGenerator
+            W_GENERATOR_AVAILABLE = True
+            print("      ✅ AndroidWGenerator 加载成功（回退）")
+        except ImportError:
+            print("      ⚠️ 所有 W生成器都不可用")
 
 
 class GeetestHelperLocal:
@@ -62,16 +82,34 @@ class GeetestHelperLocal:
         self.threshold = threshold
         
         # 初始化本地 W 参数生成器
-        try:
-            self.w_generator = LocalWGenerator(js_file_path=js_file_path)
-        except Exception as e:
-            print(f"   ⚠️  W参数生成器初始化失败: {e}")
-            print(f"   请确保 jiyanv4/gcaptcha4_click.js 文件存在")
-            raise
+        if W_GENERATOR_AVAILABLE and LocalWGenerator is not None:
+            try:
+                self.w_generator = LocalWGenerator(js_file_path=js_file_path)
+            except Exception as e:
+                print(f"   ⚠️  W参数生成器初始化失败: {e}")
+                print(f"   将在运行时使用远程AI服务")
+                self.w_generator = None
+        else:
+            print(f"   ⚠️  W参数生成器不可用，将使用远程AI服务")
+            self.w_generator = None
         
-        # 加载ONNX模型
-        print(f"   加载ONNX模型: {model_path}")
-        self.model = SiameseONNX(model_path)
+        # 加载ONNX模型（如果配置了远程AI，跳过本地模型）
+        ai_server_url = os.environ.get('AI_SERVER_URL')
+        if ai_server_url:
+            print(f"   🌐 已配置远程AI服务，跳过本地模型加载")
+            self.model = None
+        elif not ONNX_AVAILABLE or SiameseONNX is None:
+            print(f"   ⚠️  ONNX模块不可用，将使用远程AI服务")
+            self.model = None
+        else:
+            print(f"   加载ONNX模型: {model_path}")
+            try:
+                self.model = SiameseONNX(model_path)
+                print(f"   ✅ ONNX模型加载成功")
+            except Exception as e:
+                print(f"   ⚠️  ONNX模型加载失败: {e}")
+                print(f"   📌 将使用远程AI服务")
+                self.model = None
         
         # Android 客户端请求头
         self.android_headers = {
@@ -379,6 +417,10 @@ def quick_verify_local(phone_or_text: Optional[str] = None,
         challenge = helper.generate_challenge(phone_or_text)
     
     return helper.verify(challenge)
+
+
+# 创建别名以保持向后兼容
+GeetestHelper = GeetestHelperLocal
 
 
 if __name__ == "__main__":
