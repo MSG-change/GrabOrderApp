@@ -518,10 +518,10 @@ class FastGrabOrderService:
                 'geeDto': gee_dto
             }
             
-            # 使用正确的API端点
-            url = f"{self.api_base_url}/gate/app-api/club/order/grab"
+            # 使用官方APP的API端点
+            url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
             
-            self.log(f"  [REQUEST] POST /club/order/grab with geeDto")
+            self.log(f"  [REQUEST] POST /club/order/grabAnOrder/v1 with geeDto")
             self.log(f"  [GEEDTO] lotNumber: {gee_dto.get('lotNumber', 'N/A')[:20]}...")
             self.log(f"  [GEEDTO] captchaOutput length: {len(gee_dto.get('captchaOutput', ''))} chars")
             self.log(f"  [PAYLOAD] orderId: {order_id_int} (type: {type(order_id_int).__name__})")
