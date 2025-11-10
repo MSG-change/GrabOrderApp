@@ -14,7 +14,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json,js,ttf
 
 # Version
-version = 1.5.0
+version = 1.8.0
 
 # Application requirements (Python packages)
 # Minimal requirements for stability
@@ -28,8 +28,8 @@ android.ndk = 25b
 android.archs = arm64-v8a,armeabi-v7a
 android.accept_sdk_license = True
 
-# Service declaration
-services = VpnService:src/vpn_service.py
+# Service declaration (removed - not used)
+# services = VpnService:src/vpn_service.py
 
 # Orientation
 orientation = portrait
@@ -40,8 +40,8 @@ fullscreen = 0
 # Background running
 android.wakelock = True
 
-# Gradle dependencies
-android.gradle_dependencies = com.microsoft.onnxruntime:onnxruntime-android:1.15.0
+# Gradle dependencies (removed ONNX - not used)
+# android.gradle_dependencies = com.microsoft.onnxruntime:onnxruntime-android:1.15.0
 
 # Application theme and hardware acceleration
 android.manifest.application = {"android:hardwareAccelerated": "true", "android:largeHeap": "true"}
