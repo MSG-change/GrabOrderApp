@@ -507,16 +507,24 @@ class FastGrabOrderService:
             # ============================================================
             # 步骤5: 发送抢单请求（带geeDto）
             # ============================================================
-            order_id_str = str(order_id)
+            # 转换为整数格式（API要求）
+            try:
+                order_id_int = int(order_id)
+            except (ValueError, TypeError):
+                order_id_int = order_id
+            
             payload = {
-                'orderId': order_id_str,
+                'orderId': order_id_int,  # 整数格式
                 'geeDto': gee_dto
             }
             
-            url = f"{self.api_base_url}/gate/app-api/club/order/grabAnOrder/v1"
+            # 使用正确的API端点
+            url = f"{self.api_base_url}/gate/app-api/club/order/grab"
             
-            self.log(f"  [REQUEST] POST grabAnOrder/v1 with geeDto")
+            self.log(f"  [REQUEST] POST /club/order/grab with geeDto")
             self.log(f"  [GEEDTO] lotNumber: {gee_dto.get('lotNumber', 'N/A')[:20]}...")
+            self.log(f"  [GEEDTO] captchaOutput length: {len(gee_dto.get('captchaOutput', ''))} chars")
+            self.log(f"  [PAYLOAD] orderId: {order_id_int} (type: {type(order_id_int).__name__})")
             
             response = self.session.post(url, json=payload)
             result = response.json()

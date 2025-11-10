@@ -1,0 +1,1 @@
+../../assets/jiyanv4/gcaptcha4_click.js
