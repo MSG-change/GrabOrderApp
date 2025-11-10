@@ -481,7 +481,7 @@ class FastGrabOrderService:
             # ============================================================
             # 直接进行Geetest验证（不先尝试空geeDto）
             # ============================================================
-            self.log(f"  [GEETEST] 开始九宫格验证...")
+            self.log(f"  [GEETEST] Starting verification...")
             success = self._grab_with_geetest(order_id_str)
             
             total_time = (time.time() - total_start) * 1000
@@ -522,7 +522,7 @@ class FastGrabOrderService:
             # 步骤1-3: 执行完整的Geetest验证
             # Load → 识别 → 生成W → Verify
             # ============================================================
-            self.log(f"  [GEETEST] 执行验证流程...")
+            self.log(f"  [GEETEST] Executing verification flow...")
             
             # 生成challenge（基于订单ID）
             challenge = self.geetest_helper.generate_challenge(str(order_id))
@@ -534,26 +534,26 @@ class FastGrabOrderService:
             
             if not geetest_result:
                 # 缓存未命中，实时获取
-                self.log(f"  [GEETEST] 实时验证中...")
+                self.log(f"  [GEETEST] Real-time verification...")
                 geetest_result = self.geetest_helper.verify(challenge=challenge)
             else:
-                self.log(f"  [GEETEST] 使用预加载验证 ⚡")
+                self.log(f"  [GEETEST] Using preloaded verification ⚡")
             
             verify_time = (time.time() - verify_start) * 1000
             
-            self.log(f"  [GEETEST] 验证耗时: {verify_time:.1f}ms")
+            self.log(f"  [GEETEST] Verification time: {verify_time:.1f}ms")
             
             if not geetest_result or not geetest_result.get('success'):
-                self.log(f"  [GEETEST] ❌ 验证失败")
+                self.log(f"  [GEETEST] ❌ Verification failed")
                 if geetest_result:
-                    self.log(f"  [GEETEST] 错误: {geetest_result.get('error', 'Unknown')}")
+                    self.log(f"  [GEETEST] Error: {geetest_result.get('error', 'Unknown')}")
                 return False
             
-            self.log(f"  [GEETEST] ✅ 验证成功")
-            self.log(f"  [GEETEST] 识别答案: {geetest_result.get('answers', [])}")
+            self.log(f"  [GEETEST] ✅ Verification successful")
+            self.log(f"  [GEETEST] Recognized answers: {geetest_result.get('answers', [])}")
             
             # 详细检查返回的参数
-            self.log(f"  [GEETEST] 返回参数检查:")
+            self.log(f"  [GEETEST] Response parameters check:")
             self.log(f"    - lot_number: {geetest_result.get('lot_number', 'MISSING')[:30]}...")
             self.log(f"    - captcha_output: {len(geetest_result.get('captcha_output', ''))} chars")
             self.log(f"    - pass_token: {geetest_result.get('pass_token', 'MISSING')[:30]}...")
@@ -575,7 +575,7 @@ class FastGrabOrderService:
             gee_dto = {k: v for k, v in gee_dto.items() if v is not None}
             
             # 详细验证每个必需参数
-            self.log(f"  [GEEDTO] 构建完成，验证参数:")
+            self.log(f"  [GEEDTO] Build complete, verifying parameters:")
             
             missing_params = []
             if not gee_dto.get('lotNumber'):
@@ -591,8 +591,8 @@ class FastGrabOrderService:
                 w_len = len(gee_dto['captchaOutput'])
                 self.log(f"    ✅ captchaOutput: {w_len} chars")
                 if w_len < 1000:
-                    self.log(f"    ⚠️  WARNING: W参数太短！期望1280字符，实际{w_len}字符")
-                self.log(f"    W参数前50字符: {gee_dto['captchaOutput'][:50]}...")
+                    self.log(f"    ⚠️  WARNING: W parameter too short! Expected 1280, got {w_len}")
+                self.log(f"    W param first 50 chars: {gee_dto['captchaOutput'][:50]}...")
             
             if not gee_dto.get('passToken'):
                 missing_params.append('passToken')
@@ -605,7 +605,7 @@ class FastGrabOrderService:
             self.log(f"    ✅ captchaKeyType: {gee_dto.get('captchaKeyType')}")
             
             if missing_params:
-                self.log(f"  [GEEDTO] ❌ 缺少必需参数: {', '.join(missing_params)}")
+                self.log(f"  [GEEDTO] ❌ Missing required params: {', '.join(missing_params)}")
                 return False
             
             # ============================================================
@@ -634,31 +634,31 @@ class FastGrabOrderService:
             response = self.session.post(url, json=payload)
             request_time = (time.time() - request_start) * 1000
             
-            self.log(f"  [RESPONSE] HTTP状态码: {response.status_code}")
-            self.log(f"  [RESPONSE] 请求耗时: {request_time:.1f}ms")
+            self.log(f"  [RESPONSE] HTTP status: {response.status_code}")
+            self.log(f"  [RESPONSE] Request time: {request_time:.1f}ms")
             
             try:
                 result = response.json()
-                self.log(f"  [RESPONSE] 响应内容: {result}")
+                self.log(f"  [RESPONSE] Response body: {result}")
             except Exception as e:
-                self.log(f"  [RESPONSE] ❌ 解析响应失败: {e}")
-                self.log(f"  [RESPONSE] 原始响应: {response.text[:200]}")
+                self.log(f"  [RESPONSE] ❌ Parse failed: {e}")
+                self.log(f"  [RESPONSE] Raw response: {response.text[:200]}")
                 return False
             
             if result.get('code') == 200 or result.get('code') == 0:
-                self.log(f"  [SUCCESS] ✅ 抢单成功！")
-                self.log(f"  [SUCCESS] 响应消息: {result.get('msg', 'N/A')}")
+                self.log(f"  [SUCCESS] ✅ Order grabbed successfully!")
+                self.log(f"  [SUCCESS] Response message: {result.get('msg', 'N/A')}")
                 self.order_cache[order_id] = time.time()
                 return True
             else:
-                self.log(f"  [FAILED] ❌ 抢单失败")
-                self.log(f"  [FAILED] 错误码: {result.get('code')}")
-                self.log(f"  [FAILED] 错误消息: {result.get('msg')}")
-                self.log(f"  [FAILED] 完整响应: {result}")
+                self.log(f"  [FAILED] ❌ Grab failed")
+                self.log(f"  [FAILED] Error code: {result.get('code')}")
+                self.log(f"  [FAILED] Error message: {result.get('msg')}")
+                self.log(f"  [FAILED] Full response: {result}")
                 
                 # 特定错误码标记缓存
                 if result.get('code') in [500, 404, 400]:
-                    self.log(f"  [CACHE] 标记订单{order_id}为已处理")
+                    self.log(f"  [CACHE] Marked order {order_id} as processed")
                     self.order_cache[order_id] = time.time()
                 
                 return False
@@ -692,7 +692,7 @@ class FastGrabOrderService:
                                 'result': result,
                                 'time': time.time()
                             })
-                            self.log(f"[CACHE] 预加载验证 {len(self.verification_queue)}/{self.max_cache_size}")
+                            self.log(f"[CACHE] Preloaded verification {len(self.verification_queue)}/{self.max_cache_size}")
                     except:
                         pass
                 
@@ -708,13 +708,13 @@ class FastGrabOrderService:
             
             if age < self.verification_ttl:  # 使用配置的TTL
                 cached = self.verification_queue.pop(0)
-                self.log(f"[VERIFY] 使用缓存验证 ⚡ (age: {age:.1f}s)", force=True)
+                self.log(f"[VERIFY] Using cached verification ⚡ (age: {age:.1f}s)", force=True)
                 # 触发新的预加载
                 self.executor.submit(self._preload_verification)
                 return cached['result']
             else:
                 # 过期了，移除并尝试下一个
-                self.log(f"[VERIFY] 缓存过期 ({age:.1f}s > {self.verification_ttl}s)")
+                self.log(f"[VERIFY] Cache expired ({age:.1f}s > {self.verification_ttl}s)")
                 self.verification_queue.pop(0)
                 return self._get_cached_verification()  # 递归检查下一个
         return None
