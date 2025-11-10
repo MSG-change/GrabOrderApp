@@ -22,6 +22,12 @@ libs_dir = os.path.join(parent_dir, 'libs')
 sys.path.insert(0, libs_dir)
 
 try:
+    from geetest_helper_optimized import GeetestHelperOptimized
+    GEETEST_OPTIMIZED_AVAILABLE = True
+except Exception:
+    GEETEST_OPTIMIZED_AVAILABLE = False
+
+try:
     from geetest_helper_remote import GeetestHelperRemote
     GEETEST_REMOTE_AVAILABLE = True
 except ImportError:
@@ -33,8 +39,8 @@ try:
 except Exception:  # 捕获所有异常（包括模块内部的 JavaException）
     GEETEST_LOCAL_AVAILABLE = False
 
-# 优先使用远程AI
-GEETEST_AVAILABLE = GEETEST_REMOTE_AVAILABLE or GEETEST_LOCAL_AVAILABLE
+# 优先级：优化版 > 远程 > 本地
+GEETEST_AVAILABLE = GEETEST_OPTIMIZED_AVAILABLE or GEETEST_REMOTE_AVAILABLE or GEETEST_LOCAL_AVAILABLE
 
 try:
     import os
@@ -727,9 +733,23 @@ class FastGrabOrderService:
         try:
             self.log("[INIT] Loading Geetest solver...")
             
-            # 优先使用远程AI（稳定可靠，避免W参数问题）
+            # 🚀 优先使用优化版（最快，本地W生成+远程AI识别）
+            if GEETEST_OPTIMIZED_AVAILABLE:
+                self.log("[INIT] Using OPTIMIZED helper (best performance) 🚀")
+                self.geetest_helper = GeetestHelperOptimized(
+                    ai_server_url=os.environ.get('AI_SERVER_URL', 'http://154.219.127.13:8889'),
+                    captcha_id="045e2c229998a88721e32a763bc0f7b8"
+                )
+                self._geetest_initialized = True
+                self.log("[OK] Optimized helper initialized ✅")
+                self.log("   - AI识别: Remote (fast endpoint)")
+                self.log("   - W生成: Local (no network delay)")
+                self.log("   - Verify: Local (direct to target)")
+                return
+            
+            # 降级到完整远程AI（稳定可靠）
             if GEETEST_REMOTE_AVAILABLE:
-                self.log("[INIT] Using remote AI service (recommended)")
+                self.log("[INIT] Using remote AI service (fallback)")
                 self.geetest_helper = GeetestHelperRemote(
                     captcha_id="045e2c229998a88721e32a763bc0f7b8"
                 )
@@ -737,12 +757,12 @@ class FastGrabOrderService:
                 self.log("[OK] Remote AI initialized ✅")
                 return
             
-            # 降级到本地模型
+            # 最后降级到本地模型
             if not GEETEST_AVAILABLE or not W_GENERATOR_AVAILABLE:
                 self.log("[WARNING] Geetest modules not available")
                 return
             
-            self.log("[INIT] Using local model (fallback)")
+            self.log("[INIT] Using local model (last fallback)")
             
             # 确定模型路径
             if os.path.exists('/data/data'):
