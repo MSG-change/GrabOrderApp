@@ -25,8 +25,8 @@ class GeetestHelperRemote:
         self.ai_server_url = ai_server_url or os.environ.get('AI_SERVER_URL', 'http://154.219.127.13:8889')
         self.captcha_id = captcha_id or "045e2c229998a88721e32a763bc0f7b8"
         
-        print(f"[GeetestRemote] 初始化")
-        print(f"  AI服务器: {self.ai_server_url}")
+        print(f"[GeetestRemote] Initialized")
+        print(f"  AI Server: {self.ai_server_url}")
         print(f"  Captcha ID: {self.captcha_id}")
     
     def verify(self, challenge=None):
@@ -69,7 +69,7 @@ class GeetestHelperRemote:
                     # 检查W参数长度
                     captcha_output = result.get('captcha_output', '')
                     if len(captcha_output) < 100 or len(captcha_output) > 500:
-                        print(f"[WARNING] W参数长度异常: {len(captcha_output)}")
+                        print(f"[WARNING] W parameter length abnormal: {len(captcha_output)}")
                     
                     return {
                         'success': True,

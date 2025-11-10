@@ -222,17 +222,17 @@ class FastGrabOrderService:
             self.executor.submit(self._preload_verification)
         
         if self.instant_mode:
-            self.log("⚡⚡⚡ 秒抢模式已启动", force=True)
-            self.log(f"  检查间隔: {self.check_interval*1000:.0f}ms", force=True)
-            self.log(f"  并发线程: {self.executor._max_workers}", force=True)
-            self.log(f"  预加载缓存: {self.max_cache_size}个", force=True)
-            self.log(f"  目标速度: <1秒", force=True)
+            self.log("⚡⚡⚡ Instant Grab Mode Started", force=True)
+            self.log(f"  Check interval: {self.check_interval*1000:.0f}ms", force=True)
+            self.log(f"  Concurrent threads: {self.executor._max_workers}", force=True)
+            self.log(f"  Preload cache: {self.max_cache_size} items", force=True)
+            self.log(f"  Target speed: <1s", force=True)
         else:
             self.log("[STARTED] Grab service is running")
             self.log(f"  Check interval: {self.check_interval}s")
             self.log(f"  Category ID: {self.category_id}")
-            self.log(f"  预加载验证: 启用")
-            self.log(f"  并发线程: {self.executor._max_workers}")
+            self.log(f"  Preload verification: Enabled")
+            self.log(f"  Concurrent threads: {self.executor._max_workers}")
         return True
     
     def stop(self):
@@ -729,12 +729,12 @@ class FastGrabOrderService:
             
             # 优先使用远程AI（稳定可靠，避免W参数问题）
             if GEETEST_REMOTE_AVAILABLE:
-                self.log("[INIT] 使用远程AI服务 (推荐)")
+                self.log("[INIT] Using remote AI service (recommended)")
                 self.geetest_helper = GeetestHelperRemote(
                     captcha_id="045e2c229998a88721e32a763bc0f7b8"
                 )
                 self._geetest_initialized = True
-                self.log("[OK] 远程AI已初始化 ✅")
+                self.log("[OK] Remote AI initialized ✅")
                 return
             
             # 降级到本地模型
@@ -742,7 +742,7 @@ class FastGrabOrderService:
                 self.log("[WARNING] Geetest modules not available")
                 return
             
-            self.log("[INIT] 使用本地模型（降级方案）")
+            self.log("[INIT] Using local model (fallback)")
             
             # 确定模型路径
             if os.path.exists('/data/data'):
@@ -758,7 +758,7 @@ class FastGrabOrderService:
             self.w_generator = LocalWGenerator()
             
             self._geetest_initialized = True
-            self.log("[OK] 本地模型已加载")
+            self.log("[OK] Local model loaded")
         
         except Exception as e:
             self.log(f"[WARNING] Geetest load failed: {e}")

@@ -717,7 +717,7 @@ class MainScreen(BoxLayout):
             interval_text = ui_config['interval_text']
             if '0.1' in interval_text:
                 self.grab_service.check_interval = 0.1
-                self._add_log_direct("⚡⚡⚡ 秒抢模式已启动")
+                self._add_log_direct("⚡⚡⚡ Instant Grab Mode Activated")
             elif '0.5' in interval_text:
                 self.grab_service.check_interval = 0.5
             elif '1' in interval_text:
@@ -788,7 +788,7 @@ class MainScreen(BoxLayout):
             interval_text = ui_config['interval_text']
             if '0.1' in interval_text:
                 self.grab_service.check_interval = 0.1
-                self._add_log_direct("⚡⚡⚡ 秒抢模式已启动")
+                self._add_log_direct("⚡⚡⚡ Instant Grab Mode Activated")
             elif '0.5' in interval_text:
                 self.grab_service.check_interval = 0.5
             elif '1' in interval_text:
