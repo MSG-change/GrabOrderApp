@@ -21,7 +21,7 @@ sys.path.insert(0, libs_dir)
 try:
     from geetest_helper_local import GeetestHelperLocal
     print("✅ GeetestHelperLocal 导入成功")
-except ImportError as e:
+except Exception as e:  # 捕获所有异常（包括模块内部的 JavaException）
     print(f"⚠️ GeetestHelperLocal 导入失败: {e}")
     GeetestHelperLocal = None
 
@@ -42,11 +42,11 @@ try:
         try:
             from local_w_generator import LocalWGenerator
             print("✅ LocalWGenerator 导入成功")
-        except ImportError as e:
+        except Exception as e:
             print(f"⚠️ LocalWGenerator导入失败（可能缺少execjs/nodejs）: {e}")
             print("   回退到AndroidWGenerator（远程API）")
             from android_w_generator import AndroidWGenerator as LocalWGenerator
-except ImportError as e:
+except Exception as e:
     print(f"⚠️ W生成器导入失败: {e}")
     LocalWGenerator = None
 

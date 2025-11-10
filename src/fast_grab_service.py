@@ -30,7 +30,7 @@ except ImportError:
 try:
     from geetest_helper_local import GeetestHelperLocal
     GEETEST_LOCAL_AVAILABLE = True
-except ImportError:
+except Exception:  # 捕获所有异常（包括模块内部的 JavaException）
     GEETEST_LOCAL_AVAILABLE = False
 
 # 优先使用远程AI

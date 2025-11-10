@@ -19,7 +19,7 @@ try:
     
     ANDROID_MODE = True
     HAS_NUMPY = False
-except ImportError:
+except Exception:  # 捕获所有异常（包括 JavaException）
     # PC环境：使用Python onnxruntime
     try:
         import onnxruntime as ort

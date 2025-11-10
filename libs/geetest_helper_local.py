@@ -16,7 +16,7 @@ import io
 try:
     from siamese_onnx import SiameseONNX
     ONNX_AVAILABLE = True
-except ImportError:
+except Exception:  # 捕获所有异常（包括模块内部的 JavaException）
     ONNX_AVAILABLE = False
     SiameseONNX = None
 
@@ -34,13 +34,13 @@ if is_android:
         from android_local_w_generator import AndroidLocalWGenerator as LocalWGenerator
         W_GENERATOR_AVAILABLE = True
         print("      ✅ AndroidLocalWGenerator 加载成功")
-    except ImportError as e:
+    except Exception as e:
         print(f"      ⚠️ AndroidLocalWGenerator 加载失败: {e}")
         try:
             from android_w_generator import AndroidWGenerator as LocalWGenerator
             W_GENERATOR_AVAILABLE = True
             print("      ✅ AndroidWGenerator 加载成功")
-        except ImportError:
+        except Exception:
             print("      ⚠️ 所有 Android W生成器都不可用")
 else:
     # PC环境：尝试使用本地JS
@@ -49,13 +49,13 @@ else:
         from local_w_generator import LocalWGenerator
         W_GENERATOR_AVAILABLE = True
         print("      ✅ LocalWGenerator加载成功（需要Node.js）")
-    except ImportError as e:
+    except Exception as e:
         print(f"      ⚠️ LocalWGenerator加载失败: {e}")
         try:
             from android_w_generator import AndroidWGenerator as LocalWGenerator
             W_GENERATOR_AVAILABLE = True
             print("      ✅ AndroidWGenerator 加载成功（回退）")
-        except ImportError:
+        except Exception:
             print("      ⚠️ 所有 W生成器都不可用")
 
 
