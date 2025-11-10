@@ -82,12 +82,16 @@ class FastGrabOrderService:
         config_mgr = ConfigManager()
         config = config_mgr.load_config()
         self.category_id = config.get('category_id', '131')  # 使用配置中的值，默认131（考核单）
-        self.check_interval = config.get('check_interval', 2)  # 检查间隔（秒）
+        self.check_interval = config.get('check_interval', 0.5)  # 检查间隔（秒）- 优化为0.5秒
         
-        # 性能优化
-        self.executor = ThreadPoolExecutor(max_workers=3)  # 线程池
+        # 性能优化（增强版）
+        self.executor = ThreadPoolExecutor(max_workers=10)  # 线程池 - 增加到10个
         self.order_cache = {}  # 订单缓存（避免重复抢单）
         self.cache_ttl = 15  # 缓存有效期（秒）- 减少到15秒避免错过重试机会
+        
+        # 预验证缓存（新增）
+        self.verification_queue = []  # 预生成的验证缓存
+        self.max_cache_size = 5  # 最多缓存5个验证
         
         # 统计数据
         self.stats = {
@@ -191,13 +195,22 @@ class FastGrabOrderService:
         self.order_cache.clear()
         self.log("[CACHE] Cleared order cache on startup")
         
+        # 初始化Geetest（提前准备）
+        self._init_geetest()
+        
         self.running = True
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
         
+        # 启动预加载（后台）
+        for _ in range(3):  # 预加载3个验证
+            self.executor.submit(self._preload_verification)
+        
         self.log("[STARTED] Grab service is running")
         self.log(f"  Check interval: {self.check_interval}s")
         self.log(f"  Category ID: {self.category_id}")
+        self.log(f"  预加载验证: 启用")
+        self.log(f"  并发线程: {self.executor._max_workers}")
         return True
     
     def stop(self):
@@ -493,9 +506,17 @@ class FastGrabOrderService:
             challenge = self.geetest_helper.generate_challenge(str(order_id))
             self.log(f"  [GEETEST] Challenge: {challenge}")
             
-            # 调用verify方法（包含Load、识别、W生成、Verify）
+            # 优先使用缓存的验证
             verify_start = time.time()
-            geetest_result = self.geetest_helper.verify(challenge=challenge)
+            geetest_result = self._get_cached_verification()
+            
+            if not geetest_result:
+                # 缓存未命中，实时获取
+                self.log(f"  [GEETEST] 实时验证中...")
+                geetest_result = self.geetest_helper.verify(challenge=challenge)
+            else:
+                self.log(f"  [GEETEST] 使用预加载验证 ⚡")
+            
             verify_time = (time.time() - verify_start) * 1000
             
             self.log(f"  [GEETEST] 验证耗时: {verify_time:.1f}ms")
@@ -623,6 +644,51 @@ class FastGrabOrderService:
         except Exception as e:
             self.log(f"  [ERROR] Geetest exception: {e}")
             return False
+    
+    def _preload_verification(self):
+        """后台预加载验证码（提前准备）"""
+        try:
+            if len(self.verification_queue) >= self.max_cache_size:
+                return  # 缓存已满
+            
+            # 使用远程AI服务
+            if hasattr(self, 'geetest_helper') and self.geetest_helper:
+                import uuid
+                challenge = str(uuid.uuid4())
+                
+                # 异步获取验证
+                future = self.executor.submit(
+                    self.geetest_helper.verify, 
+                    challenge=challenge
+                )
+                
+                def cache_result(f):
+                    try:
+                        result = f.result(timeout=5)
+                        if result and result.get('success'):
+                            self.verification_queue.append({
+                                'result': result,
+                                'time': time.time()
+                            })
+                            self.log(f"[CACHE] 预加载验证 {len(self.verification_queue)}/{self.max_cache_size}")
+                    except:
+                        pass
+                
+                future.add_done_callback(cache_result)
+        except:
+            pass
+    
+    def _get_cached_verification(self):
+        """获取缓存的验证（如果有）"""
+        if self.verification_queue:
+            # 检查最老的缓存
+            if time.time() - self.verification_queue[0]['time'] < 30:  # 30秒内有效
+                cached = self.verification_queue.pop(0)
+                self.log("[VERIFY] 使用缓存验证 ⚡")
+                # 触发新的预加载
+                self.executor.submit(self._preload_verification)
+                return cached['result']
+        return None
     
     def _init_geetest(self):
         """初始化 Geetest 识别器"""
