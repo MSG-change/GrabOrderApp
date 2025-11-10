@@ -473,16 +473,30 @@ class FastGrabOrderService:
             
             # 生成challenge（基于订单ID）
             challenge = self.geetest_helper.generate_challenge(str(order_id))
+            self.log(f"  [GEETEST] Challenge: {challenge}")
             
             # 调用verify方法（包含Load、识别、W生成、Verify）
+            verify_start = time.time()
             geetest_result = self.geetest_helper.verify(challenge=challenge)
+            verify_time = (time.time() - verify_start) * 1000
+            
+            self.log(f"  [GEETEST] 验证耗时: {verify_time:.1f}ms")
             
             if not geetest_result or not geetest_result.get('success'):
                 self.log(f"  [GEETEST] ❌ 验证失败")
+                if geetest_result:
+                    self.log(f"  [GEETEST] 错误: {geetest_result.get('error', 'Unknown')}")
                 return False
             
             self.log(f"  [GEETEST] ✅ 验证成功")
             self.log(f"  [GEETEST] 识别答案: {geetest_result.get('answers', [])}")
+            
+            # 详细检查返回的参数
+            self.log(f"  [GEETEST] 返回参数检查:")
+            self.log(f"    - lot_number: {geetest_result.get('lot_number', 'MISSING')[:30]}...")
+            self.log(f"    - captcha_output: {len(geetest_result.get('captcha_output', ''))} chars")
+            self.log(f"    - pass_token: {geetest_result.get('pass_token', 'MISSING')[:30]}...")
+            self.log(f"    - gen_time: {geetest_result.get('gen_time', 'MISSING')}")
             
             # ============================================================
             # 步骤4: 构建geeDto
@@ -499,9 +513,38 @@ class FastGrabOrderService:
             # 移除None值
             gee_dto = {k: v for k, v in gee_dto.items() if v is not None}
             
-            # 验证必需的参数
-            if not gee_dto.get('lotNumber') or not gee_dto.get('captchaOutput') or not gee_dto.get('passToken'):
-                self.log(f"  [GEETEST] ❌ 参数不完整")
+            # 详细验证每个必需参数
+            self.log(f"  [GEEDTO] 构建完成，验证参数:")
+            
+            missing_params = []
+            if not gee_dto.get('lotNumber'):
+                missing_params.append('lotNumber')
+                self.log(f"    ❌ lotNumber: MISSING")
+            else:
+                self.log(f"    ✅ lotNumber: {gee_dto['lotNumber'][:30]}...")
+            
+            if not gee_dto.get('captchaOutput'):
+                missing_params.append('captchaOutput')
+                self.log(f"    ❌ captchaOutput: MISSING")
+            else:
+                w_len = len(gee_dto['captchaOutput'])
+                self.log(f"    ✅ captchaOutput: {w_len} chars")
+                if w_len < 1000:
+                    self.log(f"    ⚠️  WARNING: W参数太短！期望1280字符，实际{w_len}字符")
+                self.log(f"    W参数前50字符: {gee_dto['captchaOutput'][:50]}...")
+            
+            if not gee_dto.get('passToken'):
+                missing_params.append('passToken')
+                self.log(f"    ❌ passToken: MISSING")
+            else:
+                self.log(f"    ✅ passToken: {gee_dto['passToken'][:30]}...")
+            
+            self.log(f"    ✅ genTime: {gee_dto.get('genTime')}")
+            self.log(f"    ✅ captchaId: {gee_dto.get('captchaId')}")
+            self.log(f"    ✅ captchaKeyType: {gee_dto.get('captchaKeyType')}")
+            
+            if missing_params:
+                self.log(f"  [GEEDTO] ❌ 缺少必需参数: {', '.join(missing_params)}")
                 return False
             
             # ============================================================
@@ -526,17 +569,37 @@ class FastGrabOrderService:
             self.log(f"  [GEEDTO] captchaOutput length: {len(gee_dto.get('captchaOutput', ''))} chars")
             self.log(f"  [PAYLOAD] orderId: {order_id_int} (type: {type(order_id_int).__name__})")
             
+            request_start = time.time()
             response = self.session.post(url, json=payload)
-            result = response.json()
+            request_time = (time.time() - request_start) * 1000
+            
+            self.log(f"  [RESPONSE] HTTP状态码: {response.status_code}")
+            self.log(f"  [RESPONSE] 请求耗时: {request_time:.1f}ms")
+            
+            try:
+                result = response.json()
+                self.log(f"  [RESPONSE] 响应内容: {result}")
+            except Exception as e:
+                self.log(f"  [RESPONSE] ❌ 解析响应失败: {e}")
+                self.log(f"  [RESPONSE] 原始响应: {response.text[:200]}")
+                return False
             
             if result.get('code') == 200 or result.get('code') == 0:
                 self.log(f"  [SUCCESS] ✅ 抢单成功！")
+                self.log(f"  [SUCCESS] 响应消息: {result.get('msg', 'N/A')}")
                 self.order_cache[order_id] = time.time()
                 return True
             else:
-                self.log(f"  [FAILED] ❌ 抢单失败: {result.get('msg')}")
+                self.log(f"  [FAILED] ❌ 抢单失败")
+                self.log(f"  [FAILED] 错误码: {result.get('code')}")
+                self.log(f"  [FAILED] 错误消息: {result.get('msg')}")
+                self.log(f"  [FAILED] 完整响应: {result}")
+                
+                # 特定错误码标记缓存
                 if result.get('code') in [500, 404, 400]:
+                    self.log(f"  [CACHE] 标记订单{order_id}为已处理")
                     self.order_cache[order_id] = time.time()
+                
                 return False
         
         except Exception as e:
