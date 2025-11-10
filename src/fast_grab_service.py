@@ -77,9 +77,12 @@ class FastGrabOrderService:
         self.running = False
         self.thread = None
         
-        # 抢单参数
-        self.category_id = "131"  # Default from working script
-        self.check_interval = 2  # 检查间隔（秒），默认2秒
+        # 抢单参数（从配置读取）
+        from src.config_manager import ConfigManager
+        config_mgr = ConfigManager()
+        config = config_mgr.load_config()
+        self.category_id = config.get('category_id', '131')  # 使用配置中的值，默认131（考核单）
+        self.check_interval = config.get('check_interval', 2)  # 检查间隔（秒）
         
         # 性能优化
         self.executor = ThreadPoolExecutor(max_workers=3)  # 线程池
@@ -162,6 +165,21 @@ class FastGrabOrderService:
         self.log(f"[HEADERS] club-id: {self.headers.get('club-id', 'NOT SET')}")
         self.log(f"[HEADERS] role-id: {self.headers.get('role-id', 'NOT SET')}")
         self.log(f"[HEADERS] tenant-id: {self.headers.get('tenant-id', 'NOT SET')}")
+    
+    def update_category_id(self, category_id):
+        """
+        动态更新产品分类ID
+        
+        Args:
+            category_id: 新的产品分类ID
+        """
+        old_id = self.category_id
+        self.category_id = str(category_id)
+        if old_id != self.category_id:
+            self.log(f"[CONFIG] Category ID updated: {old_id} -> {self.category_id}")
+            # 清空订单缓存，因为分类变了
+            self.order_cache.clear()
+            self.log(f"[CACHE] Cleared order cache due to category change")
     
     def start(self):
         """启动抢单服务"""

@@ -28,7 +28,7 @@ class ConfigManager:
         self.default_config = {
             'phone': '18113011654',
             'api_base_url': 'https://dysh.dyswl.com',
-            'category_id': '2469',
+            'category_id': '131',  # 考核单分类ID
             'check_interval': 2,
             'token': '',
             'club_id': '',

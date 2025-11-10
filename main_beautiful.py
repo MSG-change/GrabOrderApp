@@ -296,7 +296,7 @@ class MainScreen(BoxLayout):
         category_box.add_widget(category_label)
         
         self.category_input = TextInput(
-            text='2469',
+            text='131',  # 考核单分类ID
             multiline=False,
             size_hint_x=0.65,
             font_size='12sp',
@@ -459,7 +459,7 @@ class MainScreen(BoxLayout):
             else:
                 self.grab_service.check_interval = 3
             
-            self.grab_service.category_id = self.category_input.text.strip() or '2469'
+            self.grab_service.category_id = self.category_input.text.strip() or '131'  # 默认考核单
             
             # 4. 等待 Token
             self.add_log("")

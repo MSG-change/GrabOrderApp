@@ -1,0 +1,13 @@
+{
+    "categories": {
+        "131": {
+            "name": "考核单",
+            "description": "考核单订单"
+        },
+        "2469": {
+            "name": "默认分类",
+            "description": "默认商品分类"
+        }
+    },
+    "default": "131"
+}
