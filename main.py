@@ -10,6 +10,10 @@ import sys
 import threading
 from datetime import datetime
 
+# 配置云AI服务器（如果未设置环境变量）
+if 'AI_SERVER_URL' not in os.environ:
+    os.environ['AI_SERVER_URL'] = 'http://154.219.127.13:8889'
+
 # Android 日志
 try:
     from jnius import autoclass
