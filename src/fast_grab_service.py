@@ -105,10 +105,10 @@ class FastGrabOrderService:
         self.order_cache = {}  # 订单缓存（避免重复抢单）
         self.cache_ttl = 15  # 缓存有效期（秒）- 减少到15秒避免错过重试机会
         
-        # 预验证缓存（加强版）
-        self.verification_queue = []  # 预生成的验证缓存
-        self.max_cache_size = 20  # 最多缓存20个验证
-        self.verification_ttl = 90  # 验证缓存有效期：90秒（通用安全值）
+        # 预验证缓存（已禁用 - challenge 必须与订单匹配）
+        # self.verification_queue = []  # 预生成的验证缓存
+        # self.max_cache_size = 20  # 最多缓存20个验证
+        # self.verification_ttl = 90  # 验证缓存有效期：90秒（通用安全值）
         
         # 秒抢模式
         self.instant_mode = True  # 启用秒抢模式
@@ -653,16 +653,11 @@ class FastGrabOrderService:
             challenge = self.geetest_helper.generate_challenge(str(order_id))
             self.log(f"  [GEETEST] Challenge: {challenge}")
             
-            # 优先使用缓存的验证
+            # ❌ 预验证缓存已禁用（challenge 必须与订单匹配）
+            # 每次实时生成验证（确保 challenge 正确）
             verify_start = time.time()
-            geetest_result = self._get_cached_verification()
-            
-            if not geetest_result:
-                # 缓存未命中，实时获取
-                self.log(f"  [GEETEST] Real-time verification...")
-                geetest_result = self.geetest_helper.verify(challenge=challenge)
-            else:
-                self.log(f"  [GEETEST] Using preloaded verification ⚡")
+            self.log(f"  [GEETEST] Real-time verification with correct challenge...")
+            geetest_result = self.geetest_helper.verify(challenge=challenge)
             
             verify_time = (time.time() - verify_start) * 1000
             
@@ -798,57 +793,26 @@ class FastGrabOrderService:
             self.log(f"  [ERROR] Traceback: {traceback.format_exc()[:300]}", force=True)
             return False
     
-    def _preload_verification(self):
-        """后台预加载验证码（提前准备）"""
-        try:
-            if len(self.verification_queue) >= self.max_cache_size:
-                return  # 缓存已满
-            
-            # 使用远程AI服务
-            if hasattr(self, 'geetest_helper') and self.geetest_helper:
-                import uuid
-                challenge = str(uuid.uuid4())
-                
-                # 异步获取验证
-                future = self.executor.submit(
-                    self.geetest_helper.verify, 
-                    challenge=challenge
-                )
-                
-                def cache_result(f):
-                    try:
-                        result = f.result(timeout=5)
-                        if result and result.get('success'):
-                            self.verification_queue.append({
-                                'result': result,
-                                'time': time.time()
-                            })
-                            self.log(f"[CACHE] Preloaded verification {len(self.verification_queue)}/{self.max_cache_size}")
-                    except:
-                        pass
-                
-                future.add_done_callback(cache_result)
-        except:
-            pass
+    # ========================================================================
+    # ❌ 预验证缓存功能已禁用
+    # ========================================================================
+    # 原因：challenge 必须与订单ID匹配，预生成的验证结果无法使用
+    # 
+    # 问题分析：
+    # 1. 预生成时使用随机UUID作为challenge
+    # 2. 实际抢单时使用订单ID生成challenge
+    # 3. 两个challenge不匹配，导致验证失败
+    # 
+    # 解决方案：每次实时生成验证，确保challenge正确
+    # ========================================================================
     
-    def _get_cached_verification(self):
-        """获取缓存的验证（如果有）"""
-        if self.verification_queue:
-            # 检查最老的缓存是否过期
-            age = time.time() - self.verification_queue[0]['time']
-            
-            if age < self.verification_ttl:  # 使用配置的TTL
-                cached = self.verification_queue.pop(0)
-                self.log(f"[VERIFY] Using cached verification ⚡ (age: {age:.1f}s)", force=True)
-                # 触发新的预加载
-                self.executor.submit(self._preload_verification)
-                return cached['result']
-            else:
-                # 过期了，移除并尝试下一个
-                self.log(f"[VERIFY] Cache expired ({age:.1f}s > {self.verification_ttl}s)")
-                self.verification_queue.pop(0)
-                return self._get_cached_verification()  # 递归检查下一个
-        return None
+    # def _preload_verification(self):
+    #     """后台预加载验证码（已禁用 - challenge不匹配问题）"""
+    #     pass
+    
+    # def _get_cached_verification(self):
+    #     """获取缓存的验证（已禁用 - challenge不匹配问题）"""
+    #     return None
     
     def _init_geetest(self):
         """初始化 Geetest 识别器"""
