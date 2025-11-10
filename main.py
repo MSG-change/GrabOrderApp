@@ -107,6 +107,8 @@ try:
     log_print("✅ FastGrabOrderService imported successfully")
 except Exception as e:
     log_print(f"❌ Grab Service import failed: {e}")
+    import traceback
+    log_print(traceback.format_exc())
     GRAB_SERVICE_AVAILABLE = False
 
 
@@ -325,7 +327,7 @@ class MainScreen(BoxLayout):
         
         self.interval_spinner = Spinner(
             text='1s',
-            values=('0.5s', '1s', '2s', '3s'),
+            values=('⚡ 0.1s (秒抢)', '0.5s', '1s', '2s', '3s'),
             size_hint_x=0.65,
             font_size='12sp',
             background_color=(0.2, 0.2, 0.23, 1),
@@ -713,7 +715,10 @@ class MainScreen(BoxLayout):
             )
             
             interval_text = ui_config['interval_text']
-            if '0.5' in interval_text:
+            if '0.1' in interval_text:
+                self.grab_service.check_interval = 0.1
+                self._add_log_direct("⚡⚡⚡ 秒抢模式已启动")
+            elif '0.5' in interval_text:
                 self.grab_service.check_interval = 0.5
             elif '1' in interval_text:
                 self.grab_service.check_interval = 1
@@ -781,7 +786,10 @@ class MainScreen(BoxLayout):
             
             # 设置检查间隔
             interval_text = ui_config['interval_text']
-            if '0.5' in interval_text:
+            if '0.1' in interval_text:
+                self.grab_service.check_interval = 0.1
+                self._add_log_direct("⚡⚡⚡ 秒抢模式已启动")
+            elif '0.5' in interval_text:
                 self.grab_service.check_interval = 0.5
             elif '1' in interval_text:
                 self.grab_service.check_interval = 1
