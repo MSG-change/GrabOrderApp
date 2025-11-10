@@ -146,9 +146,10 @@ class FastGrabOrderService:
             pool_connections=10,  # 连接池大小
             pool_maxsize=20,      # 最大连接数
             max_retries=Retry(
-                total=2,          # 最多重试2次
-                backoff_factor=0.1,  # 重试间隔
+                total=3,          # 最多重试3次
+                backoff_factor=0.3,  # 重试间隔（0.3s, 0.6s, 1.2s）
                 status_forcelist=[500, 502, 503, 504],  # 需要重试的状态码
+                raise_on_status=False  # 不抛出异常，返回响应
             )
         )
         
@@ -164,7 +165,7 @@ class FastGrabOrderService:
         """包装请求方法，添加默认超时"""
         def wrapped_request(*args, **kwargs):
             if 'timeout' not in kwargs:
-                kwargs['timeout'] = 5  # 默认5秒超时
+                kwargs['timeout'] = 15  # 默认15秒超时（网络较慢时）
             return original_request(*args, **kwargs)
         return wrapped_request
     
@@ -456,7 +457,7 @@ class FastGrabOrderService:
                 'userServerAreaId': self.user_server_area_id  # Support multi-area
             }
             
-            response = self.session.get(url, params=params, timeout=5)
+            response = self.session.get(url, params=params, timeout=15)  # 15秒超时
             
             # Log response status (force in instant mode for debugging)
             if response.status_code != 200:
