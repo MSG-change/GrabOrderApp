@@ -22,10 +22,19 @@ libs_dir = os.path.join(parent_dir, 'libs')
 sys.path.insert(0, libs_dir)
 
 try:
-    from geetest_helper_local import GeetestHelperLocal
-    GEETEST_AVAILABLE = True
+    from geetest_helper_remote import GeetestHelperRemote
+    GEETEST_REMOTE_AVAILABLE = True
 except ImportError:
-    GEETEST_AVAILABLE = False
+    GEETEST_REMOTE_AVAILABLE = False
+
+try:
+    from geetest_helper_local import GeetestHelperLocal
+    GEETEST_LOCAL_AVAILABLE = True
+except ImportError:
+    GEETEST_LOCAL_AVAILABLE = False
+
+# 优先使用远程AI
+GEETEST_AVAILABLE = GEETEST_REMOTE_AVAILABLE or GEETEST_LOCAL_AVAILABLE
 
 try:
     import os
@@ -718,9 +727,22 @@ class FastGrabOrderService:
         try:
             self.log("[INIT] Loading Geetest solver...")
             
+            # 优先使用远程AI（稳定可靠，避免W参数问题）
+            if GEETEST_REMOTE_AVAILABLE:
+                self.log("[INIT] 使用远程AI服务 (推荐)")
+                self.geetest_helper = GeetestHelperRemote(
+                    captcha_id="045e2c229998a88721e32a763bc0f7b8"
+                )
+                self._geetest_initialized = True
+                self.log("[OK] 远程AI已初始化 ✅")
+                return
+            
+            # 降级到本地模型
             if not GEETEST_AVAILABLE or not W_GENERATOR_AVAILABLE:
                 self.log("[WARNING] Geetest modules not available")
                 return
+            
+            self.log("[INIT] 使用本地模型（降级方案）")
             
             # 确定模型路径
             if os.path.exists('/data/data'):
@@ -736,10 +758,12 @@ class FastGrabOrderService:
             self.w_generator = LocalWGenerator()
             
             self._geetest_initialized = True
-            self.log("[OK] Geetest solver loaded")
+            self.log("[OK] 本地模型已加载")
         
         except Exception as e:
             self.log(f"[WARNING] Geetest load failed: {e}")
+            import traceback
+            self.log(traceback.format_exc()[:300])
     
     def _get_order_id(self, order):
         """获取订单 ID"""
