@@ -63,9 +63,9 @@ class GeetestHelperOptimized:
         
         return None
     
-    def get_ai_answer(self, challenge=None, timeout=5):
+    def get_ai_answer(self, challenge=None, timeout=10):
         """
-        只调用AI识别，返回坐标
+        只调用AI识别，返回坐标和必要参数
         
         Args:
             challenge: 挑战值
@@ -75,6 +75,9 @@ class GeetestHelperOptimized:
             dict: {
                 'success': True/False,
                 'answers': [[x1,y1], [x2,y2], ...],
+                'lot_number': '...',
+                'gen_time': '...',
+                'pow_detail': {...},  # W生成所需
                 'error': '...'
             }
         """
@@ -84,9 +87,9 @@ class GeetestHelperOptimized:
         try:
             start_time = time.time()
             
-            # 只请求 AI 识别
+            # 优先尝试轻量级端点
             response = requests.post(
-                f"{self.ai_server_url}/api/ai_only",  # 新的轻量级端点
+                f"{self.ai_server_url}/api/ai_only",
                 json={
                     'captcha_id': self.captcha_id,
                     'challenge': challenge
@@ -176,25 +179,15 @@ class GeetestHelperOptimized:
             lot_number = hashlib.md5(f"{challenge}_{gen_time}".encode()).hexdigest()
             print(f"[WARNING] lot_number empty from server, generated: {lot_number[:20]}...")
         
-        # 步骤2: 本地生成 W 参数
-        w_start = time.time()
+        # 步骤2: 由于当前 /api/ai_only 端点不返回 W 生成所需的参数
+        # 暂时回退到完整远程服务
+        # TODO: 优化服务器端，让 /api/ai_only 返回 pow_detail 等完整参数
         
-        if self.w_generator:
-            # 本地生成（快）
-            try:
-                captcha_output = self.w_generator.generate(
-                    lot_number=lot_number,
-                    answers=answers
-                )
-                w_elapsed = time.time() - w_start
-                print(f"[W参数] 本地生成成功 ({w_elapsed:.2f}s)")
-            except Exception as e:
-                print(f"[W参数] 本地生成失败: {e}, 回退到远程")
-                return self._fallback_to_remote(challenge)
-        else:
-            # 回退到远程完整服务
-            print(f"[W参数] 无本地生成器，回退到远程完整服务")
-            return self._fallback_to_remote(challenge)
+        print(f"[NOTICE] Current /api/ai_only implementation incomplete")
+        print(f"[NOTICE] Missing: pow_detail (version, bits, datetime, hashfunc)")
+        print(f"[FALLBACK] Using full remote service (/api/verify)")
+        
+        return self._fallback_to_remote(challenge)
         
         # 步骤3: 本地发送 verify（如果提供了 target_url）
         if target_url:
