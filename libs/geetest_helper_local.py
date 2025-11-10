@@ -208,11 +208,11 @@ class GeetestHelperLocal:
         ai_server_url = os.environ.get('AI_SERVER_URL')
         if ai_server_url:
             try:
-                print(f"   🌐 使用远程AI服务: {ai_server_url}")
+                print(f"   🌐 使用远程AI完整验证服务: {ai_server_url}")
                 
-                # 使用新的简化API - 直接传入captcha_id和challenge
+                # 使用新的完整验证API - 直接返回所有必需参数
                 response = requests.post(
-                    f"{ai_server_url}/api/recognize",
+                    f"{ai_server_url}/api/verify",
                     json={
                         'captcha_id': self.captcha_id,
                         'challenge': challenge,
@@ -224,19 +224,15 @@ class GeetestHelperLocal:
                 if response.status_code == 200:
                     result = response.json()
                     if result.get('success'):
-                        print(f"   ✅ 远程识别成功: {result.get('answers')}")
+                        print(f"   ✅ 远程验证成功!")
+                        print(f"      识别答案: {result.get('answers')}")
+                        print(f"      Lot Number: {result.get('lot_number')}")
+                        print(f"      W参数已生成: {result.get('captcha_output')[:20]}...")
                         
-                        # 远程 AI 只返回识别结果，我们需要完成完整的验证流程
-                        # 保存识别答案，继续执行本地的 Load -> Verify 流程
-                        remote_answers = result.get('answers')
-                        print(f"   📝 保存远程识别结果: {remote_answers}")
-                        print(f"   继续执行完整验证流程...")
-                        
-                        # 不return，继续执行下面的本地处理流程
-                        # 但在识别步骤时使用远程的答案
-                        self._remote_answers = remote_answers
+                        # 直接返回完整结果，不需要本地处理
+                        return result
                     else:
-                        print(f"   ⚠️  远程识别失败: {result.get('error')}")
+                        print(f"   ⚠️  远程验证失败: {result.get('error')}")
                 else:
                     print(f"   ⚠️  远程API响应异常: {response.status_code}")
                         
