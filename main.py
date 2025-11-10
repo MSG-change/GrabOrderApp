@@ -458,6 +458,49 @@ class MainScreen(BoxLayout):
         category_box.add_widget(self.category_id_input)
         config_panel.add_widget(category_box)
         
+        # Server Area ID (for multi-area support)
+        area_box = BoxLayout(size_hint_y=None, height=40, spacing=10)
+        area_label = Label(
+            text='Area ID',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1),
+        )
+        area_box.add_widget(area_label)
+        
+        self.area_id_input = TextInput(
+            text='',
+            hint_text='Server Area ID (empty=all)',
+            multiline=False,
+            size_hint_x=0.65,
+            font_size='12sp',
+            background_color=(0.2, 0.2, 0.23, 1),
+            foreground_color=(1, 1, 1, 1),
+            cursor_color=(0.3, 0.7, 1, 1),
+            padding=[10, 8],
+        )
+        area_box.add_widget(self.area_id_input)
+        config_panel.add_widget(area_box)
+        
+        # Voice notification checkbox
+        voice_box = BoxLayout(size_hint_y=None, height=40, spacing=10, padding=[5, 0])
+        voice_label = Label(
+            text='Voice Alert',
+            size_hint_x=0.35,
+            font_size='13sp',
+            color=(0.8, 0.8, 0.8, 1),
+        )
+        voice_box.add_widget(voice_label)
+        
+        from kivy.uix.checkbox import CheckBox
+        self.voice_checkbox = CheckBox(
+            active=True,
+            size_hint_x=0.65,
+            color=(0.3, 0.7, 1, 1),
+        )
+        voice_box.add_widget(self.voice_checkbox)
+        config_panel.add_widget(voice_box)
+        
         self.add_widget(config_panel)
         
         # 控制按钮
@@ -550,7 +593,9 @@ class MainScreen(BoxLayout):
                 'club_id': self.club_id_input.text.strip() or '27',
                 'role_id': self.role_id_input.text.strip() or '317',
                 'tenant_id': self.tenant_id_input.text.strip() or '212',
-                'category_id': self.category_id_input.text.strip() or '131'
+                'category_id': self.category_id_input.text.strip() or '131',
+                'user_server_area_id': self.area_id_input.text.strip(),  # Server area ID
+                'enable_voice_notification': self.voice_checkbox.active  # Voice notification toggle
             }
             
             # 在后台线程启动
@@ -727,8 +772,10 @@ class MainScreen(BoxLayout):
             else:
                 self.grab_service.check_interval = 3
             
-            # category_id 从 UI 配置读取
+            # Apply configuration from UI
             self.grab_service.category_id = ui_config.get('category_id', '131')
+            self.grab_service.user_server_area_id = ui_config.get('user_server_area_id', '')
+            self.grab_service.enable_voice = ui_config.get('enable_voice_notification', True)
             
             # 4. 等待自动捕获 Token
             self._add_log_direct("")
@@ -799,10 +846,15 @@ class MainScreen(BoxLayout):
                 self.grab_service.check_interval = 3
             
             self.grab_service.category_id = ui_config.get('category_id', '131')
+            self.grab_service.user_server_area_id = ui_config.get('user_server_area_id', '')
+            self.grab_service.enable_voice = ui_config.get('enable_voice_notification', True)
             
             self._add_log_direct("[OK] Grab service initialized")
             self._add_log_direct(f"[CONFIG] Check interval: {self.grab_service.check_interval}s")
             self._add_log_direct(f"[CONFIG] Category ID: {self.grab_service.category_id}")
+            if self.grab_service.user_server_area_id:
+                self._add_log_direct(f"[CONFIG] Server Area ID: {self.grab_service.user_server_area_id}")
+            self._add_log_direct(f"[CONFIG] Voice notification: {'Enabled' if self.grab_service.enable_voice else 'Disabled'}")
             self._add_log_direct("")
             
             # Apply token and start

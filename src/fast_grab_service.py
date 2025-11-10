@@ -98,6 +98,7 @@ class FastGrabOrderService:
         config = config_mgr.load_config()
         self.category_id = config.get('category_id', '131')  # 使用配置中的值，默认131（考核单）
         self.check_interval = config.get('check_interval', 0.1)  # 检查间隔（秒）- 秒抢模式100ms
+        self.user_server_area_id = config.get('user_server_area_id', '')  # 服务区域ID（空=所有区域）
         
         # 性能优化（极速版）
         self.executor = ThreadPoolExecutor(max_workers=20)  # 线程池 - 增加到20个
@@ -124,9 +125,17 @@ class FastGrabOrderService:
             'avg_grab_time': [],
         }
         
+        # Voice notification settings
+        self.enable_voice = config.get('enable_voice_notification', True)
+        self._init_voice_notification()
+        
         self.log("[INIT] Fast grab service initialized")
         self.log(f"  API: {self.api_base_url}")
         self.log(f"  Check interval: {self.check_interval}s")
+        if self.user_server_area_id:
+            self.log(f"  Server Area ID: {self.user_server_area_id}")
+        else:
+            self.log(f"  Server Area ID: All areas")
     
     def _create_optimized_session(self):
         """创建优化的 HTTP Session"""
@@ -158,6 +167,112 @@ class FastGrabOrderService:
                 kwargs['timeout'] = 5  # 默认5秒超时
             return original_request(*args, **kwargs)
         return wrapped_request
+    
+    def _init_voice_notification(self):
+        """Initialize voice notification system"""
+        self.tts_available = False
+        self.audio_player = None
+        
+        try:
+            # Check if running on Android
+            if is_android:
+                try:
+                    from jnius import autoclass
+                    self.tts_class = autoclass('android.speech.tts.TextToSpeech')
+                    self.locale_class = autoclass('java.util.Locale')
+                    # TTS will be initialized when first used (needs Activity context)
+                    self.tts_available = True
+                    self.log("[VOICE] Android TTS initialized")
+                except Exception as e:
+                    self.log(f"[VOICE] Android TTS init failed: {e}")
+            else:
+                # PC: Try pyttsx3 for TTS
+                try:
+                    import pyttsx3
+                    self.tts_engine = pyttsx3.init()
+                    self.tts_engine.setProperty('rate', 150)  # Speed
+                    self.tts_engine.setProperty('volume', 1.0)  # Volume
+                    self.tts_available = True
+                    self.log("[VOICE] PC TTS (pyttsx3) initialized")
+                except Exception as e:
+                    self.log(f"[VOICE] PC TTS init failed: {e}")
+                    # Fallback: try pygame for audio file playback
+                    try:
+                        import pygame
+                        pygame.mixer.init()
+                        self.audio_player = pygame.mixer
+                        self.log("[VOICE] Audio player (pygame) initialized")
+                    except Exception as e2:
+                        self.log(f"[VOICE] Audio player init failed: {e2}")
+        except Exception as e:
+            self.log(f"[VOICE] Voice notification init failed: {e}")
+    
+    def _play_success_sound(self):
+        """Play success notification sound"""
+        if not self.enable_voice:
+            return
+        
+        # Run in background thread to avoid blocking
+        threading.Thread(target=self._play_success_sound_async, daemon=True).start()
+    
+    def _play_success_sound_async(self):
+        """Play success sound asynchronously"""
+        try:
+            message = "抢单成功，快来看看"
+            
+            if is_android and self.tts_available:
+                # Android TTS
+                try:
+                    from jnius import autoclass, cast
+                    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                    activity = PythonActivity.mActivity
+                    
+                    # Create TTS instance
+                    tts = self.tts_class(activity, None)
+                    time.sleep(0.5)  # Wait for TTS to initialize
+                    
+                    # Set Chinese locale
+                    locale = self.locale_class.CHINESE
+                    tts.setLanguage(locale)
+                    
+                    # Speak
+                    tts.speak(message, self.tts_class.QUEUE_FLUSH, None, "success_notification")
+                    self.log("[VOICE] Playing success notification (Android TTS)")
+                except Exception as e:
+                    self.log(f"[VOICE] Android TTS playback failed: {e}")
+            
+            elif self.tts_available and hasattr(self, 'tts_engine'):
+                # PC TTS
+                try:
+                    self.tts_engine.say(message)
+                    self.tts_engine.runAndWait()
+                    self.log("[VOICE] Playing success notification (PC TTS)")
+                except Exception as e:
+                    self.log(f"[VOICE] PC TTS playback failed: {e}")
+            
+            elif self.audio_player:
+                # Audio file playback (fallback)
+                try:
+                    # Look for success.mp3 in resources
+                    audio_file = os.path.join(parent_dir, 'resources', 'success.mp3')
+                    if not os.path.exists(audio_file):
+                        # Try alternative locations
+                        audio_file = os.path.join(parent_dir, 'success.mp3')
+                    
+                    if os.path.exists(audio_file):
+                        self.audio_player.music.load(audio_file)
+                        self.audio_player.music.play()
+                        self.log(f"[VOICE] Playing audio file: {audio_file}")
+                    else:
+                        self.log(f"[VOICE] Audio file not found: {audio_file}")
+                except Exception as e:
+                    self.log(f"[VOICE] Audio playback failed: {e}")
+            else:
+                # No voice notification available
+                self.log("[VOICE] Voice notification not available")
+                
+        except Exception as e:
+            self.log(f"[VOICE] Error playing success sound: {e}")
     
     def update_token(self, token_data):
         """
@@ -338,7 +453,7 @@ class FastGrabOrderService:
             url = f"{self.api_base_url}/gate/app-api/club/order/getOrderPoolsList"
             params = {
                 'productCategoryParentId': self.category_id,
-                'userServerAreaId': ''
+                'userServerAreaId': self.user_server_area_id  # Support multi-area
             }
             
             response = self.session.get(url, params=params, timeout=5)
@@ -658,6 +773,10 @@ class FastGrabOrderService:
                 self.log(f"  [SUCCESS] ✅ Order grabbed successfully!", force=True)
                 self.log(f"  [SUCCESS] Response message: {result.get('msg', 'N/A')}")
                 self.order_cache[order_id] = time.time()
+                
+                # Play success notification sound
+                self._play_success_sound()
+                
                 return True
             else:
                 self.log(f"  [FAILED] ❌ Grab FAILED", force=True)
