@@ -112,6 +112,13 @@ class GeetestHelperOptimized:
                         'success': False,
                         'error': result.get('error', 'AI识别失败')
                     }
+            elif response.status_code == 404:
+                # 端点不存在，返回特殊错误码以触发回退
+                return {
+                    'success': False,
+                    'error': 'ENDPOINT_NOT_FOUND',
+                    'should_fallback': True
+                }
             else:
                 return {
                     'success': False,
@@ -149,6 +156,11 @@ class GeetestHelperOptimized:
         ai_result = self.get_ai_answer(challenge)
         
         if not ai_result.get('success'):
+            # 如果是端点不存在，直接回退到完整服务
+            if ai_result.get('should_fallback'):
+                print(f"[WARNING] /api/ai_only endpoint not available, fallback to full service")
+                return self._fallback_to_remote(challenge)
+            
             return {
                 'success': False,
                 'error': f"AI识别失败: {ai_result.get('error')}"
@@ -157,6 +169,12 @@ class GeetestHelperOptimized:
         answers = ai_result.get('answers', [])
         lot_number = ai_result.get('lot_number')
         gen_time = ai_result.get('gen_time')
+        
+        # 如果服务器没有返回 lot_number，生成一个
+        if not lot_number:
+            import hashlib
+            lot_number = hashlib.md5(f"{challenge}_{gen_time}".encode()).hexdigest()
+            print(f"[WARNING] lot_number empty from server, generated: {lot_number[:20]}...")
         
         # 步骤2: 本地生成 W 参数
         w_start = time.time()
@@ -208,10 +226,14 @@ class GeetestHelperOptimized:
             total_elapsed = time.time() - total_start
             print(f"[总耗时] {total_elapsed:.2f}s (仅AI+W生成)")
             
+            # 生成 pass_token
+            pass_token = self._generate_pass_token(lot_number, gen_time)
+            
             return {
                 'success': True,
                 'lot_number': lot_number,
                 'captcha_output': captcha_output,
+                'pass_token': pass_token,  # ✅ 添加 pass_token
                 'gen_time': gen_time,
                 'answers': answers
             }
