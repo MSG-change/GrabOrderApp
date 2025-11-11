@@ -297,15 +297,14 @@ class GeetestHelperOptimized:
             }
     
     def generate_challenge(self, order_id):
-        """生成challenge值 - 使用UUID格式，Geetest标准格式"""
-        # Geetest的challenge必须是UUID格式，不能是MD5
-        # 使用固定的UUID + 订单ID作为种子，确保可重现
+        """生成challenge值 - 基于订单ID生成MD5格式"""
         import hashlib
-        # 生成基于订单ID的UUID格式字符串
-        seed = f"{order_id}_{self.captcha_id}_{int(time.time())}"
-        hash_val = hashlib.md5(seed.encode()).hexdigest()
-        # 转换为UUID格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-        challenge = f"{hash_val[:8]}-{hash_val[8:12]}-{hash_val[12:16]}-{hash_val[16:20]}-{hash_val[20:32]}"
+        # 使用订单ID + 时间戳 + captcha_id生成MD5
+        # 确保challenge与订单关联且唯一
+        timestamp = str(int(time.time() * 1000))
+        seed = f"{order_id}_{timestamp}_{self.captcha_id}"
+        challenge = hashlib.md5(seed.encode()).hexdigest()
+        # 返回32字符的MD5格式（不要UUID格式的横线）
         return challenge
     
     def verify_with_answers(self, challenge=None, answers=None):
