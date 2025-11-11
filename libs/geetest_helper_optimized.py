@@ -305,9 +305,9 @@ class GeetestHelperOptimized:
         使用缓存的识别答案快速生成验证（智能缓存优化）
         
         策略：
-        - 跳过AI识别步骤（使用缓存的answers）
-        - 用正确的challenge生成W参数
-        - 节省~1000ms AI识别时间
+        - 使用缓存的answers（省AI识别时间）
+        - 调用服务器获取W生成参数（lot_number, pow_detail）
+        - 用正确的challenge调用完整服务生成W
         
         Args:
             challenge: 正确的挑战值（基于订单ID）
@@ -324,11 +324,36 @@ class GeetestHelperOptimized:
             # 回退到完整验证
             return self.verify(challenge)
         
-        # 使用完整远程服务，但传入缓存的answers可以让服务器跳过识别
-        # 注意：这仍然会调用完整API，但如果服务器支持，可以优化
-        # 当前实现：直接用完整验证，但记录使用了缓存
-        print(f"[CACHE] Using cached answers: {answers}")
-        print(f"[CACHE] Generating W with correct challenge: {challenge[:20]}...")
+        print(f"[CACHE] Using cached answers: {answers} ⚡")
+        print(f"[CACHE] Challenge: {challenge[:30]}...")
         
-        # 调用完整远程服务（因为本地W生成依赖服务器参数）
-        return self._fallback_to_remote(challenge)
+        # 🚀 关键优化：传递缓存的answers给服务器
+        # 服务器会检查answers参数，如果存在则跳过AI识别
+        # 这样可以节省~9秒的AI识别时间
+        
+        try:
+            response = requests.post(
+                f"{self.ai_server_url}/api/verify",
+                json={
+                    'captcha_id': self.captcha_id,
+                    'challenge': challenge,
+                    'answers': answers  # ✅ 传递缓存的answers
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"[CACHE] Server used cached answers, verification: {len(result.get('captcha_output', ''))} chars")
+                return result
+            else:
+                print(f"[ERROR] verify_with_answers failed: HTTP {response.status_code}")
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}'
+                }
+        
+        except Exception as e:
+            print(f"[ERROR] verify_with_answers exception: {e}")
+            # 回退到完整服务（不带answers）
+            return self._fallback_to_remote(challenge)
