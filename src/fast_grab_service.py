@@ -1008,11 +1008,11 @@ class FastGrabOrderService:
     def _get_order_id(self, order):
         """获取订单 ID"""
         # 尝试多种可能的字段名
-        # 注意：可能需要 orderNo 而不是 id
+        # 测试确认：API需要的是id字段（内部ID），不是no（订单号）
         order_id = None
         
         # 按优先级尝试不同字段
-        for field in ['orderNo', 'orderId', 'id', 'order_id']:
+        for field in ['id', 'orderId', 'orderNo', 'order_id', 'no']:
             if field in order and order[field]:
                 order_id = order[field]
                 self.log(f"  [ORDER_ID] Using field '{field}' = {order_id}")

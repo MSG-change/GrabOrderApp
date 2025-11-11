@@ -297,8 +297,13 @@ class GeetestHelperOptimized:
             }
     
     def generate_challenge(self, order_id):
-        """生成challenge值"""
-        return str(uuid.uuid4())
+        """生成challenge值 - 基于订单ID生成，确保与订单关联"""
+        import hashlib
+        # 使用订单ID + 时间戳生成唯一的challenge
+        timestamp = str(int(time.time() * 1000))
+        data = f"{order_id}_{timestamp}_{self.captcha_id}"
+        challenge = hashlib.md5(data.encode()).hexdigest()
+        return challenge
     
     def verify_with_answers(self, challenge=None, answers=None):
         """
