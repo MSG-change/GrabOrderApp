@@ -358,16 +358,24 @@ class FastGrabOrderService:
             self.log(f"  Waiting for cache to build...", force=True)
             import concurrent.futures
             completed = 0
+            failed = 0
             for i, future in enumerate(concurrent.futures.as_completed(preload_futures, timeout=60)):
                 try:
-                    future.result()
-                    completed += 1
-                    if completed % 3 == 0 or completed == preload_count:
-                        self.log(f"  [CACHE] Preloaded {completed}/{preload_count} recognition results", force=True)
+                    success = future.result()  # 检查返回值
+                    if success:
+                        completed += 1
+                        if completed % 3 == 0 or completed == preload_count:
+                            self.log(f"  [CACHE] Preloaded {completed}/{preload_count} recognition results", force=True)
+                    else:
+                        failed += 1
+                        self.log(f"  [CACHE] Preload task {i+1} returned False (possibly timeout or error)")
                 except Exception as e:
-                    self.log(f"  [CACHE] Preload task {i+1} failed: {e}")
+                    failed += 1
+                    self.log(f"  [CACHE] Preload task {i+1} failed with exception: {e}")
             
             cache_size = len(self.recognition_cache)
+            if failed > 0:
+                self.log(f"  ⚠️  {failed}/{preload_count} tasks failed", force=True)
             if cache_size > 0:
                 self.log(f"  ✅ Cache ready: {cache_size} recognition results loaded", force=True)
             else:
@@ -897,18 +905,22 @@ class FastGrabOrderService:
     def _recognize_only(self, challenge):
         """仅执行AI识别，不生成W参数"""
         try:
-            # 调用AI识别接口
+            # 调用AI识别接口（增加超时到15秒）
             if hasattr(self.geetest_helper, 'get_ai_answer'):
-                result = self.geetest_helper.get_ai_answer(challenge=challenge, timeout=10)
+                result = self.geetest_helper.get_ai_answer(challenge=challenge, timeout=15)
                 if result and result.get('success'):
                     return {
                         'success': True,
                         'answers': result.get('answers'),
                         'image_hash': result.get('image_hash', challenge[:8])
                     }
+                else:
+                    # 记录失败原因
+                    error = result.get('error', 'Unknown') if result else 'No result'
+                    self.log(f"[RECOGNIZE] Failed: {error}")
             return {'success': False}
         except Exception as e:
-            self.log(f"[RECOGNIZE] Error: {e}")
+            self.log(f"[RECOGNIZE] Exception: {e}")
             return {'success': False}
     
     def _get_cached_recognition(self):
